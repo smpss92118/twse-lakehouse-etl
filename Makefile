@@ -16,7 +16,7 @@ END ?= $(DATE)
 METHOD ?= backward
 
 .PHONY: help setup env lint test dag-test fixtures deploy deploy-from-ci build up down logs trigger status \
-	demo-snapshots demo-asof demo-correct demo-rollback demo-evolve demo-adjusted dev-backfill clean \
+	demo-snapshots demo-asof demo-correct demo-rollback demo-evolve demo-adjusted review passwords dev-backfill clean \
 	bigdata-up bigdata-down trino-sql
 
 help: ## list targets
@@ -61,7 +61,7 @@ build: ## build the Airflow image
 	$(COMPOSE) build
 
 up: env deploy build ## start Airflow on http://localhost:8080
-	mkdir -p .local/airflow/logs .local/lake
+	mkdir -p .local/airflow/logs .local/airflow/auth .local/lake
 	$(COMPOSE) up -d --wait
 
 down: ## stop Airflow (data in .local/ is kept)
@@ -73,6 +73,13 @@ logs: ## follow scheduler logs
 trigger: ## run the DAG for DATE (default 2026-10-29)
 	$(AIRFLOW) airflow dags unpause twse_daily_etl
 	$(AIRFLOW) airflow dags trigger twse_daily_etl --conf '{"trade_date": "$(DATE)"}'
+
+passwords: ## local Airflow logins (admin, trader), generated on first start
+	@cat .local/airflow/auth/passwords.json; echo
+
+review: ## ask a person to review a corporate action: STOCK=2762 DATE=2026-10-29 (Airflow UI > Required Actions)
+	$(AIRFLOW) airflow dags trigger twse_corporate_action_review \
+		--conf '{"items": [{"trade_date": "$(DATE)", "stock_id": "$(STOCK)"}]}'
 
 status: ## task states of recent runs
 	$(AIRFLOW) airflow dags list-runs twse_daily_etl
@@ -106,7 +113,7 @@ clean: ## delete local lake + logs (asks first)
 BIGDATA := $(COMPOSE) -f docker-compose.yaml -f docker-compose.bigdata.yaml
 
 bigdata-up: env deploy build ## big-data layout: S3 (SeaweedFS) + Postgres Iceberg catalog + Trino on :8081
-	mkdir -p .local/airflow/logs .local/lake .local/object-store
+	mkdir -p .local/airflow/logs .local/airflow/auth .local/lake .local/object-store
 	$(BIGDATA) up -d --wait
 
 bigdata-down: ## stop the big-data layout

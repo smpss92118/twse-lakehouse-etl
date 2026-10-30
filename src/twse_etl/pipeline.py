@@ -234,7 +234,16 @@ def stage_corporate_actions(bundle: dict, d: date, settings: Settings) -> pl.Dat
                 terms[(report, key)] = parsed
     events = corporate_actions.attach_formula(events, corporate_actions.terms_frame(terms))
     vendor = corporate_actions.load_vendor(settings.vendor_dir, date.fromisoformat(bundle["window"][0]), d)
-    return corporate_actions.attach_vendor(events, vendor)
+    events = corporate_actions.attach_vendor(events, vendor)
+    return corporate_actions.apply_decisions(events, review_decisions(settings))
+
+
+def review_decisions(settings: Settings) -> pl.DataFrame:
+    """Every human review so far (see review.py); empty before the first one."""
+    catalog = iceberg_io.get_catalog(settings)
+    if not catalog.table_exists(f"{settings.namespace}.review_decisions"):
+        return pl.from_arrow(contracts.REVIEW_DECISIONS_SCHEMA.empty_table())
+    return iceberg_io.read_all(iceberg_io.get_table(settings, "review_decisions", catalog))
 
 
 def _load_staged(staged: dict[str, dict]) -> dict[str, pl.DataFrame]:
@@ -283,6 +292,17 @@ def audit(d: date, staged: dict[str, dict], settings: Settings) -> dict:
         "checks": [ch.to_dict() for ch in checks],
         "unexplained_x": corporate_actions.unexplained_x(quotes, actions),
     }
+
+
+def events_to_review(d: date, settings: Settings) -> list[dict]:
+    """After publishing: events whose cross-checks disagree and that nobody has reviewed yet.
+    A reviewed event is never reopened, whatever its checks still say."""
+    actions = iceberg_io.read(iceberg_io.get_table(settings, "corporate_actions"), ca_window_start(d, settings), d)
+    quotes = iceberg_io.read(iceberg_io.get_table(settings, "daily_quotes"), d)
+    found = corporate_actions.disagreements(actions, quotes, _prev_close(d, settings), d)
+    reviewed = actions.filter(pl.col("review_decision_id").is_not_null())
+    todo = corporate_actions.events_to_review(found).join(reviewed, on=["trade_date", "stock_id"], how="anti")
+    return [{**row, "trade_date": row["trade_date"].isoformat(), "run_date": d.isoformat()} for row in todo.to_dicts()]
 
 
 def publish(d: date, staged: dict[str, dict], settings: Settings, run_id: str) -> dict[str, dict]:
@@ -391,6 +411,20 @@ def run_day(d: date, settings: Settings, run_id: str | None = None, bodies: dict
     published[GOLD_TABLE] = build_gold(d, settings, run_id)
     manifest = reconcile(d, settings, run_id, staged, audit_report)
     return {**manifest, "published": published}
+
+
+def latest_bronze(settings: Settings, report: str, d: date) -> bytes:
+    prefix = storage.join(settings.data_uri, "bronze", report, f"trade_date={d}")
+    files = [u for u in storage.list_files(prefix, ".json") if not u.endswith(".meta.json")]
+    if not files:
+        raise MissingDataError(f"no Bronze file for {report} {d}; run the pipeline for that day first")
+    return storage.read_bytes(files[-1])
+
+
+def rerun_from_bronze(d: date, settings: Settings, run_id: str) -> dict:
+    """Re-run a day on the exact payloads it last loaded: picks up review decisions (or a parser
+    fix) without asking TWSE again. Unchanged tables are skipped by the content fingerprint."""
+    return run_day(d, settings, run_id=run_id, bodies={r: latest_bronze(settings, r, d) for r in REPORT_TABLES})
 
 
 def main() -> None:

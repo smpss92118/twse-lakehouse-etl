@@ -7,6 +7,7 @@ Every weekday 15:30 Asia/Taipei: TWSE closing quotes (MI_INDEX) + institutional 
 ```
 check_trading_day ─> wait_for_reports ─> route ─┬─> extract_* ─> stage_* ─> audit
                                                 │      ─> publish_silver ─> build_gold ─> reconcile
+                                                │      ─> request_review ─> open_review   (sources disagree)
                                                 └─> check_unscheduled_closure   (cutoff passed, no data)
 ```
 
@@ -16,6 +17,8 @@ check_trading_day ─> wait_for_reports ─> route ─┬─> extract_* ─> sta
   is asked whether the market was closed. Evidenced closure -> skip; anything else -> fail + alert.
 * **Bad data** (audit or reconcile failure, schema drift): fail fast, no retries, alert. Iceberg is
   untouched when the audit fails, because publishing only starts after every check passed.
+* **Sources disagree on a corporate action** (formula, vendor, our own close): the day is loaded
+  with TWSE's numbers, and each unreviewed event opens a form in `twse_corporate_action_review`.
 
 Manual run for a given day: trigger with config `{"trade_date": "2026-10-29"}`.
 """
@@ -26,6 +29,7 @@ import logging
 from datetime import date, timedelta
 
 import pendulum
+from airflow.providers.standard.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.sdk import Param, PokeReturnValue, dag, get_current_context, task
 from airflow.sdk.exceptions import AirflowFailException
 from airflow.timetables.trigger import CronTriggerTimetable
@@ -186,6 +190,18 @@ def twse_daily_etl():
         manifest = _run(check, date.fromisoformat(trade_date), _settings(), run_id, staged, audit_report)
         return {"snapshots": manifest["snapshots"], "row_counts": manifest["row_counts"]}
 
+    @task.short_circuit
+    def request_review(trade_date: str, _manifest: dict) -> dict | bool:
+        """The day stays loaded with TWSE's numbers; a person decides the events the sources dispute."""
+        from twse_etl.alerts import alert
+        from twse_etl.pipeline import events_to_review
+
+        items = events_to_review(date.fromisoformat(trade_date), _settings())
+        if not items:
+            return False
+        alert("review_requested", trade_date=trade_date, events=[f"{i['stock_id']} {i['checks']}" for i in items])
+        return {"items": items}
+
     trade_date = check_trading_day()
     routed = route(wait_for_reports(trade_date))
     routed >> check_unscheduled_closure(trade_date)
@@ -199,7 +215,12 @@ def twse_daily_etl():
     audit_report = audit(trade_date, **staged)
     published = publish_silver(trade_date, **staged, _audit=audit_report)
     gold = build_gold(trade_date, published)
-    reconcile(trade_date, **staged, audit_report=audit_report, _gold=gold)
+    manifest = reconcile(trade_date, **staged, audit_report=audit_report, _gold=gold)
+    TriggerDagRunOperator(
+        task_id="open_review",
+        trigger_dag_id="twse_corporate_action_review",
+        conf=request_review(trade_date, _manifest=manifest),
+    )
 
 
 twse_daily_etl()

@@ -23,7 +23,7 @@ import polars as pl
 from pyiceberg.table.snapshots import Operation, ancestors_of
 from pyiceberg.types import StringType
 
-from twse_etl import adjust, iceberg_io, pipeline, storage
+from twse_etl import adjust, iceberg_io, pipeline
 from twse_etl.config import Settings
 
 TPE = ZoneInfo("Asia/Taipei")
@@ -111,14 +111,6 @@ def cmd_as_of(args, settings: Settings) -> None:
     print(df.select(cols).sort("trade_date", "stock_id").head(args.limit))
 
 
-def _latest_bronze(settings: Settings, report: str, d: date) -> bytes:
-    prefix = storage.join(settings.data_uri, "bronze", report, f"trade_date={d}")
-    files = [u for u in storage.list_files(prefix, ".json") if not u.endswith(".meta.json")]
-    if not files:
-        raise SystemExit(f"no Bronze file for {report} {d}; run the pipeline for that day first")
-    return storage.read_bytes(files[-1])
-
-
 def cmd_correct(args, settings: Settings) -> None:
     """Re-ingest a day where TWSE 'corrected' one stock's traded volume. Same code path as a
     scheduled run; the other reports parse to identical content, so they produce no new snapshot."""
@@ -126,7 +118,7 @@ def cmd_correct(args, settings: Settings) -> None:
     quotes_tbl = iceberg_io.get_table(settings, "daily_quotes")
     before = iceberg_io.current_version(quotes_tbl, d)
 
-    doc = json.loads(_latest_bronze(settings, "MI_INDEX", d))
+    doc = json.loads(pipeline.latest_bronze(settings, "MI_INDEX", d))
     table = next(t for t in doc["tables"] if "證券代號" in (t.get("fields") or []))
     col = table["fields"].index("成交股數")
     row = next(r for r in table["data"] if r[0].strip() == stock)
@@ -136,8 +128,8 @@ def cmd_correct(args, settings: Settings) -> None:
 
     bodies = {
         "MI_INDEX": json.dumps(doc, ensure_ascii=False).encode(),
-        "T86": _latest_bronze(settings, "T86", d),
-        pipeline.CORPORATE_ACTIONS: _latest_bronze(settings, pipeline.CORPORATE_ACTIONS, d),
+        "T86": pipeline.latest_bronze(settings, "T86", d),
+        pipeline.CORPORATE_ACTIONS: pipeline.latest_bronze(settings, pipeline.CORPORATE_ACTIONS, d),
     }
     result = pipeline.run_day(d, settings, run_id=f"correction__{datetime.now(TPE):%Y%m%dT%H%M%S}", bodies=bodies)
     for name, res in result["published"].items():

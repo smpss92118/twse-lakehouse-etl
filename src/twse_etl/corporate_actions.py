@@ -128,37 +128,77 @@ def attach_formula(actions: pl.DataFrame, terms: pl.DataFrame) -> pl.DataFrame:
     ).drop("_calc", *TERM_COLUMNS)
 
 
-def audit_corporate_actions(
-    actions: pl.DataFrame, quotes: pl.DataFrame, prev_close: pl.DataFrame | None, trade_date: date
-) -> list[Check]:
-    col = pl.col
-    is_dividend = col("action_type").is_in(c.DIVIDEND_ACTIONS)
-    # Dividends only ever lower the price; reductions and reverse splits raise it.
-    factor_ok = (
-        pl.when(is_dividend)
-        .then(col("adj_factor").is_between(0.0, 1.0, closed="right"))
-        .otherwise(col("adj_factor").is_between(0.0, MAX_REVERSE_FACTOR, closed="right"))
+def factor_in_range() -> pl.Expr:
+    """Dividends only ever lower the price; reductions and reverse splits raise it."""
+    factor = pl.col("adj_factor")
+    return (
+        pl.when(pl.col("action_type").is_in(c.DIVIDEND_ACTIONS))
+        .then(factor.is_between(0.0, 1.0, closed="right"))
+        .otherwise(factor.is_between(0.0, MAX_REVERSE_FACTOR, closed="right"))
         .fill_null(False)
     )
+
+
+def disagreements(
+    actions: pl.DataFrame, quotes: pl.DataFrame, prev_close: pl.DataFrame | None, trade_date: date
+) -> dict[str, pl.DataFrame]:
+    """The cross-checks that alert instead of block: check name -> events failing it."""
+    col = pl.col
     ref = pl.coalesce("dividend_ref_price", "ref_price").cast(pl.Float64)
     open_ref = col("open_ref_price").cast(pl.Float64)
     open_ref_ok = ((open_ref - ref).abs() <= tick_size(ref, col("stock_id")) + 1e-9).fill_null(True)
     traded = quotes.filter(col("close").is_not_null())
-    dividends_today = actions.filter((col("trade_date") == trade_date) & is_dividend)
-    not_x = dividends_today.join(traded.filter(col("change_sign") != "X"), on="stock_id", how="semi")
-    checks = [
-        row_check("ca_adj_factor_range", actions.filter(~factor_ok)),
-        row_check("ca_formula_agrees", actions.filter(col("formula_agrees") == False), blocking=False),  # noqa: E712
-        row_check("ca_open_ref_within_tick", actions.filter(~open_ref_ok), blocking=False),
-        row_check("ca_event_marked_x_in_quotes", not_x, blocking=False),
-        row_check("ca_vendor_agrees", actions.filter(col("sources_agreed") == False), blocking=False),  # noqa: E712
-    ]
+    dividends_today = actions.filter((col("trade_date") == trade_date) & col("action_type").is_in(c.DIVIDEND_ACTIONS))
+    found = {
+        "ca_formula_agrees": actions.filter(col("formula_agrees") == False),  # noqa: E712
+        "ca_open_ref_within_tick": actions.filter(~open_ref_ok),
+        "ca_event_marked_x_in_quotes": dividends_today.join(
+            traded.filter(col("change_sign") != "X"), on="stock_id", how="semi"
+        ),
+        "ca_vendor_agrees": actions.filter(col("sources_agreed") == False),  # noqa: E712
+    }
     if prev_close is not None and prev_close.height:
-        mismatch = actions.join(prev_close.select("stock_id", "close"), on="stock_id", how="inner").filter(
-            col("before_close") != col("close")
-        )
-        checks.append(row_check("ca_before_close_matches_silver", mismatch, blocking=False))
-    return checks
+        found["ca_before_close_matches_silver"] = actions.join(
+            prev_close.select("stock_id", "close"), on="stock_id", how="inner"
+        ).filter(col("before_close") != col("close"))
+    return found
+
+
+def audit_corporate_actions(
+    actions: pl.DataFrame, quotes: pl.DataFrame, prev_close: pl.DataFrame | None, trade_date: date
+) -> list[Check]:
+    found = disagreements(actions, quotes, prev_close, trade_date)
+    alerts = [row_check(name, rows, blocking=False) for name, rows in found.items()]
+    return [row_check("ca_adj_factor_range", actions.filter(~factor_in_range())), *alerts]
+
+
+def events_to_review(found: dict[str, pl.DataFrame]) -> pl.DataFrame:
+    """One row per event that failed any cross-check: trade_date, stock_id, checks ("a,b")."""
+    rows = [df.select("trade_date", "stock_id", pl.lit(name).alias("check")) for name, df in found.items()]
+    schema = {"trade_date": pl.Date, "stock_id": pl.String, "check": pl.String}
+    return (
+        pl.concat([pl.DataFrame(schema=schema), *rows])
+        .group_by("trade_date", "stock_id")
+        .agg(pl.col("check").unique().sort().str.join(",").alias("checks"))
+        .sort("trade_date", "stock_id")
+    )
+
+
+def apply_decisions(actions: pl.DataFrame, decisions: pl.DataFrame) -> pl.DataFrame:
+    """The latest human decision per event: "override" replaces adj_factor with the reviewer's
+    ref_price / before_close; either decision marks the event as reviewed (review_decision_id).
+    The TWSE columns are left as published, so the table shows both what TWSE said and what is used."""
+    latest = (
+        decisions.sort("reviewed_at")
+        .group_by("trade_date", "stock_id")
+        .last()
+        .select("trade_date", "stock_id", "decision", "decision_id", pl.col("adj_factor").alias("_reviewed"))
+    )
+    out = actions.join(latest, on=["trade_date", "stock_id"], how="left")
+    factor = pl.when(pl.col("decision") == "override").then(pl.col("_reviewed")).otherwise(pl.col("adj_factor"))
+    return out.with_columns(factor.alias("adj_factor"), pl.col("decision_id").alias("review_decision_id")).drop(
+        "decision", "decision_id", "_reviewed"
+    )
 
 
 def unexplained_x(quotes: pl.DataFrame, actions: pl.DataFrame) -> list[str]:

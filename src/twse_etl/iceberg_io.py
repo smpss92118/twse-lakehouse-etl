@@ -29,6 +29,7 @@ SCHEMAS = {
     "institutional_flows": c.INSTITUTIONAL_SCHEMA,
     "corporate_actions": c.CORPORATE_ACTIONS_SCHEMA,
     "daily_market_wide": c.GOLD_SCHEMA,
+    "review_decisions": c.REVIEW_DECISIONS_SCHEMA,
 }
 
 
@@ -139,10 +140,20 @@ def read(tbl: Table, start: date, end: date | None = None, snapshot_id: int | No
     return tbl.scan(row_filter=date_filter(start, end), snapshot_id=snapshot_id).to_polars()
 
 
+def read_all(tbl: Table) -> pl.DataFrame:
+    if tbl.current_snapshot() is None:
+        return pl.from_arrow(tbl.schema().as_arrow().empty_table())
+    return tbl.scan().to_polars()
+
+
+def loaded_dates(tbl: Table) -> list[date]:
+    """Metadata-only: the trade_date partitions that currently hold data."""
+    if tbl.current_snapshot() is None:
+        return []
+    return sorted(row["partition"]["trade_date"] for row in tbl.inspect.partitions().to_pylist())
+
+
 def latest_date_before(tbl: Table, d: date) -> date | None:
     """Metadata-only lookup of the previous loaded trading day."""
-    if tbl.current_snapshot() is None:
-        return None
-    dates = [row["partition"]["trade_date"] for row in tbl.inspect.partitions().to_pylist()]
-    earlier = [x for x in dates if x is not None and x < d]
+    earlier = [x for x in loaded_dates(tbl) if x < d]
     return max(earlier) if earlier else None

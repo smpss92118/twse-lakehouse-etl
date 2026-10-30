@@ -181,6 +181,34 @@ CORPORATE_ACTIONS_SCHEMA = pa.schema(
         # TWT49U only: the reference price without a cash capital increase. TWSE opens (and sets the
         # price limits) from it, so for a rights issue open_ref_price follows it, not ref_price.
         pa.field("dividend_ref_price", PRICE),
+        # Set when a person reviewed the event (review_decisions); adj_factor then follows the decision.
+        pa.field("review_decision_id", pa.string()),
+    ]
+)
+
+# Append-only log of human reviews of corporate actions that the cross-checks could not reconcile.
+# The latest decision per (trade_date, stock_id) is applied every time that event is staged, so
+# reruns and backfills keep the reviewed factor; earlier decisions stay as the audit trail.
+REVIEW_DECISIONS_SCHEMA = pa.schema(
+    [
+        pa.field("decision_id", pa.string(), nullable=False),
+        pa.field("trade_date", pa.date32(), nullable=False),  # the event's effective date
+        pa.field("stock_id", pa.string(), nullable=False),
+        pa.field("run_date", pa.date32(), nullable=False),  # pipeline day re-run with the decision
+        pa.field("checks", pa.string(), nullable=False),  # what disagreed, or "manual_request"
+        pa.field("decision", pa.string(), nullable=False),  # accept_twse | override
+        pa.field("twse_ref_price", PRICE),
+        pa.field("twse_before_close", PRICE),
+        pa.field("twse_adj_factor", pa.float64()),
+        pa.field("ref_price", PRICE),  # values in force after the decision
+        pa.field("before_close", PRICE),
+        pa.field("adj_factor", pa.float64()),
+        pa.field("reason", pa.string(), nullable=False),
+        pa.field("reviewed_by", pa.string(), nullable=False),  # authenticated Airflow user
+        pa.field("reviewed_by_id", pa.string(), nullable=False),
+        pa.field("reviewed_at", pa.timestamp("us", tz="UTC"), nullable=False),
+        pa.field("review_run_id", pa.string(), nullable=False),
+        pa.field("evidence", pa.string()),  # JSON: every source's values as the reviewer saw them
     ]
 )
 

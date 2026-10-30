@@ -49,7 +49,8 @@ brew install uv                       # 有 Python 3.12 就用；沒有時 uv �
 ```bash
 make setup      # .venv（測試、本機跑 pipeline 用）
 make up         # 產生 .env（本機隨機 secret）→ 部署 DAG → build image → 起 Airflow
-open http://localhost:8080             # 本機用 SimpleAuthManager，不需登入
+make passwords  # 本機登入帳號：admin（管理）、trader（審核），密碼首次啟動時隨機產生
+open http://localhost:8080
 ```
 
 所有狀態都在 `.local/`（Iceberg warehouse、Bronze、log、uv cache），`make clean` 一次清掉；
@@ -73,6 +74,7 @@ UI 上按 Trigger 也可以，在 config 填 `trade_date`；留空就是排程�
 ```
 check_trading_day ─> wait_for_reports ─> route ─┬─> extract_{quotes,institutional,corporate_actions}
                                                 │     ─> stage_* ─> audit ─> publish_silver ─> build_gold ─> reconcile
+                                                │     ─> request_review ─> open_review（來源對不上才開審核單）
                                                 └─> check_unscheduled_closure
 ```
 
@@ -86,6 +88,7 @@ check_trading_day ─> wait_for_reports ─> route ─┬─> extract_{quotes,in
 | 網路 / TWSE 暫時錯誤 | extract 重試 3 次（指數退避），用盡才告警 |
 | 稽核失敗、欄位改名（寫入前） | 不重試，直接失敗＋告警；Iceberg 完全沒動 |
 | 對帳失敗（寫入後） | 失敗＋告警；資料已寫入，用 `make demo-rollback` 一次退回該 run 寫過的所有表 |
+| 公司行動的來源對不上 | 當天照 TWSE 數字入庫、run 綠燈；每筆沒審過的事件開一張審核單給交易員（第 6 節） |
 
 告警目前是 `ALERT <event> {json}` 的 log 行（`twse_etl/alerts.py`，換成 Slack/SNS 只改這一個函式）。
 
@@ -100,7 +103,7 @@ check_trading_day ─> wait_for_reports ─> route ─┬─> extract_{quotes,in
 | 必做 3 | `make demo-correct DATE=2026-10-29` | 模擬證交所修正 2330 成交股數後重抓：無重複、新舊兩版都查得到 |
 | 選做 1 | `make demo-rollback` | 退回最近一次 run 之前：該 run 寫過的每張表一起退（`TABLE=…` 只退一張） |
 | 選做 2 | `make demo-evolve TABLE=daily_quotes` | 中途加欄位，舊資料與舊 snapshot 照樣可查 |
-| 加做 | `make demo-adjusted STOCK=2762 START=2026-10-28 END=2026-10-30` | 還原權值（後復權；`METHOD=forward` 前復權），查詢時計算、不改歷史（第 6 節） |
+| 加做 | `make demo-adjusted STOCK=2762 START=2026-10-28 END=2026-10-30` | 還原權值（前復權；`METHOD=forward` 後復權），查詢時計算、不改歷史（第 6 節） |
 
 `demo-correct` 實際輸出（節錄）：
 
@@ -144,7 +147,7 @@ make bigdata-down
 ## 4. 測試
 
 ```bash
-make test       # 67 個，不連網，約 3 秒
+make test       # 73 個，不連網，約 5 秒
 make dag-test   # 在正式 Airflow image 內：DagBag 無 import error、無循環、task 順序符合規格
 make lint
 ```
@@ -158,6 +161,7 @@ make lint
 | 臨時休市 | LLM 說沒休市、沒給來源、輸出不是 JSON、LLM 掛掉 → 都必須失敗；行情已出但法人沒出 → 連 LLM 都不問 |
 | 冪等與修正 | 重跑不產生 snapshot；修正某天後無重複、舊版可查；修好 parser 後重跑會寫新版 |
 | 還原權值 | 98 筆真實公司行動事件的官方參考價都能從明細頁重算；明細或參考價被改壞會被抓到；0050 分割日的連續性與還原後報酬 |
+| 人工審核 | 對不上的事件只開一次單；覆寫值進新版本、舊版可查；沒理由、因子超範圍等不合法回答整批不寫 |
 | 端到端 | 10-22 到 10-29 回填：颱風日、週末、補假、颱風日的除息在 10-27 生效、減資恢復交易 |
 
 CI（`.github/workflows/ci.yml`）每次 push 跑這兩個 job；CD（`cd.yml`）只在 main 上 CI 成功後觸發。
@@ -193,10 +197,17 @@ CI（`.github/workflows/ci.yml`）每次 push 跑這兩個 job；CD（`cd.yml`�
 
 | 改 | 不改 |
 |---|---|
-| `ICEBERG_CATALOG_TYPE=glue`、`ICEBERG_WAREHOUSE=s3://…`、`TWSE_DATA_URI=s3://…`（環境變數） | 所有清洗、稽核、Iceberg 讀寫、DAG 程式碼 |
-| `docker/requirements.txt` 加 `pyiceberg[glue,s3fs]` | `storage.py` 用 pyarrow FileSystem，本機路徑與 `s3://` 同一套呼叫 |
-| CD 開啟 `deploy-aws` job（repo variables：`DEPLOY_TARGET=aws`、`AWS_DEPLOY_ROLE_ARN`、`MWAA_BUCKET`），用 GitHub OIDC，repo 內不放任何金鑰 | 部署腳本本身 |
-| 告警函式改送 SNS/Slack | 告警的呼叫點 |
+| 環境變數：`ICEBERG_CATALOG_TYPE=glue`、`ICEBERG_WAREHOUSE=s3://…`、`TWSE_DATA_URI=s3://…` | 清洗、稽核、還原權值、人工審核、Iceberg 讀寫、兩個 DAG 的程式碼 |
+| `docker/requirements.txt` 加 `pyiceberg[glue,s3fs]`；MWAA 的執行角色給 S3 + Glue 權限（不放金鑰） | `storage.py`：pyarrow FileSystem，本機路徑與 `s3://` 同一套呼叫 |
+| CD 開啟 `deploy-aws` job（repo variables：`DEPLOY_TARGET=aws`、`AWS_DEPLOY_ROLE_ARN`、`MWAA_BUCKET`），GitHub OIDC | 部署腳本本身（`aws s3 sync` 同一包） |
+| `alerts.py` 改送 SNS / Slack | 告警的呼叫點 |
+| FinMind 交叉驗證：目前 `load_vendor` 用 `pathlib` 讀本機 JSON（demo），要改成呼叫 FinMind API 或讀 S3 | 交叉驗證邏輯 |
+| `ANTHROPIC_API_KEY` 放 Secrets Manager | LLM 休市查證的契約與 fail closed 判斷 |
+| 登入：SimpleAuthManager → MWAA 的 IAM / SSO（審核紀錄的 `reviewed_by` 自動變成 IAM 身分） | 審核流程 |
+| SQL：Trino → Athena（同一個 Glue catalog，SQL 幾乎不用改） | Iceberg 表、snapshot、time travel 查法 |
+
+注意：Human-in-the-loop 需要 Airflow ≥ 3.1，選 MWAA 版本時要確認；3.3 之前它靠 triggerer 執行，MWAA 內建 triggerer。
+Bronze / staging 寫 `s3://` 在設計上支援，但目前只有 Iceberg warehouse 在 S3（SeaweedFS）實測過。
 
 ## 6. 資料品質把關（寫入前稽核 27 項，寫入後對帳 4 項）
 
@@ -222,6 +233,36 @@ Gold 用 **LEFT JOIN**（從行情出發），T86 沒列的股票法人欄位填
 每次 run 寫一份 manifest（`.local/lake/data/manifests/trade_date=D/<run_id>.json`）：
 用了哪些 snapshot id、各表筆數、每項檢查結果。策略團隊引用資料時引用 snapshot id 即可重現。
 
+### 多方對不上時：交易員審核，留下誰、何時、為什麼
+
+```
+twse_daily_etl:  reconcile ─> request_review ─> open_review ──觸發──> twse_corporate_action_review
+                                                  prepare ─> review（每筆事件一張表單）─> apply
+```
+
+- **通知在哪**：Airflow UI 的 **Required Actions**，每筆事件一張：股票、日期、哪裡對不上，
+  TWSE、明細頁重算、開盤基準、FinMind、我們自己的前一日收盤並排。同時發 `ALERT review_requested`
+  （換成 Slack / SNS 只改 `alerts.py`）。
+- **審核**：選「採用 TWSE 公布值」，或填正確的參考價／事件前收盤後選「改用我填的數值」；理由必填。
+- **誰、何時**：取自 Airflow 的登入身分與回應時間，不是自己打的名字。本機帳號見 `make passwords`；
+  上 AWS 是 MWAA 的 IAM／SSO 身分。
+- **記錄**：Iceberg `review_decisions`，只新增不修改：決定、TWSE 原值、採用值、理由、`reviewed_by`、
+  `reviewed_at`，以及審核當下看到的所有來源數字（`evidence`）。同一事件再審就再加一筆，最新的生效。
+- **之後怎麼更新**：`apply` 用當天的 Bronze 重跑。staging 一律套用最新決定：`corporate_actions` 的
+  `adj_factor` 改用人工值（TWSE 原欄位不動，`review_decision_id` 指向決定），Gold 與還原權值跟著用新因子；
+  之後的重跑、回填也一樣。審核前的版本留在舊 snapshot，可 time travel。
+- 審過的事件不會再開單（即使來源仍對不上）。不合法的回答（沒理由、覆寫卻沒填值、因子超出範圍）
+  整批不寫入，在 UI 清掉 `review` task 重答即可。
+- 任何事件都能主動送審：`make review STOCK=2762 DATE=2026-10-29`。
+
+實測（live，big-data 配置）：以 `trader` 登入，對 2762 的 10-29 除息回「採用 TWSE 公布值」。
+`review_decisions` 新增一筆（reviewed_by = trader），`corporate_actions` 產生 run_id 為 `review__…` 的新 snapshot：
+
+```bash
+make trino-sql SQL='SELECT stock_id, trade_date, decision, adj_factor, reviewed_by, reviewed_at, reason
+  FROM iceberg.twse.review_decisions'
+```
+
 ### 實作中用真實資料發現、並寫成測試的事
 
 1. **MI_INDEX 漲跌欄的 `X`（不比價）**：除權息、特別股、ETN、槓桿 ETF 等當天，TWSE 印 `0.00`。
@@ -243,7 +284,7 @@ Gold 用 **LEFT JOIN**（從行情出發），T86 沒列的股票法人欄位填
 前復權、後復權都是查詢時對因子做累乘：
 
 ```bash
-make demo-adjusted STOCK=2762 START=2026-10-28 END=2026-10-30                 # 後復權（預設）
+make demo-adjusted STOCK=2762 START=2026-10-28 END=2026-10-30                 # 前復權（預設，最後一天保持原價）
 make trino-sql SQL="SELECT trade_date, close, adj_factor,
   round(close * coalesce(exp(sum(ln(adj_factor)) OVER (PARTITION BY stock_id ORDER BY trade_date DESC
     ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING)), 1), 4) AS close_adj
@@ -312,7 +353,7 @@ make trino-sql SQL="SELECT trade_date, close, adj_factor,
 |---|---|---|
 | 變更走 PR：[#2](https://github.com/smpss92118/twse-lakehouse-etl/pull/2) S3 + Postgres catalog + Trino 配置 | [CI on PR](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41055269301)（`unit-tests` + `dag-integrity`） | success |
 | merge 到 main 後：CI → CD（`workflow_run` 觸發，打包 `airflow-dags-<sha>` artifact；`deploy-aws` 未啟用所以 skipped） | [CI](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41057397362) → [CD](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41057539182) | success |
-| [#3](https://github.com/smpss92118/twse-lakehouse-etl/pull/3) 稽核強化、還原權值、CD 只認本 repo main 的 push | [checks](https://github.com/smpss92118/twse-lakehouse-etl/pull/3/checks) | — |
+| [#3](https://github.com/smpss92118/twse-lakehouse-etl/pull/3) 稽核強化、還原權值、人工審核、CD 只認本 repo main 的 push | [checks](https://github.com/smpss92118/twse-lakehouse-etl/pull/3/checks) | — |
 
 CD 的觸發條件：上游 CI 必須是**本 repo** `main` 的 **push** 且成功（或手動 `workflow_dispatch`）。
 fork 的 PR、或任何分支名叫 main 的外部分支，都不會觸發部署。
@@ -324,6 +365,7 @@ GitHub 的雲端 runner 連不到本機 Airflow，所以最後一步是一行指
 
 ```
 dags/twse_daily_etl.py        Airflow DAG（只編排，邏輯都在 twse_etl/）
+dags/twse_corporate_action_review.py  人工審核 DAG（Human-in-the-loop）
 src/twse_etl/
   config.py                   全部設定來自環境變數（本機 / CI / AWS 只差這裡）
   sources.py                  TWSE endpoints、fixture 重播、Bronze 寫入
@@ -333,6 +375,7 @@ src/twse_etl/
   validate.py                 稽核檢查
   corporate_actions.py        公司行動：官方公式重算參考價、tick 表、多方交叉驗證
   adjust.py                   還原權值（前復權／後復權），查詢時計算
+  review.py, review_form.py   人工審核：表單內容、驗證、append-only 決定紀錄
   iceberg_io.py               catalog、冪等覆寫一天、讀取
   gold.py                     合併表
   holiday_fallback.py         LLM 查證的契約與 fail-closed 判斷

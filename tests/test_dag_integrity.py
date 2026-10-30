@@ -17,7 +17,7 @@ def test_dags_import_without_errors_and_have_no_cycles():
 
     bag = DagBag(dag_folder=str(DAGS_DIR))
     assert bag.import_errors == {}
-    assert "twse_daily_etl" in bag.dags
+    assert {"twse_daily_etl", "twse_corporate_action_review"} <= set(bag.dags)
     for dag in bag.dags.values():
         dag.check_cycle()  # raises on a cycle
 
@@ -36,6 +36,8 @@ def test_task_chain_matches_the_spec():
         "publish_silver",
         "build_gold",
         "reconcile",
+        "request_review",
+        "open_review",
     ]
     for upstream, downstream in zip(order, order[1:], strict=False):
         assert downstream in dag.get_task(upstream).downstream_task_ids, f"{upstream} -> {downstream}"

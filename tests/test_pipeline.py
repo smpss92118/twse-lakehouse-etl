@@ -63,8 +63,8 @@ def test_corporate_actions_land_on_the_day_they_take_effect(loaded):
 
 def test_contract_columns_are_added_to_a_table_created_by_an_older_release(settings):
     """Schema evolution on deploy: old data files are not rewritten, their rows read the new column as null."""
-    new = {"source_report", "note", "calc_ref_price", "formula_agrees", "dividend_ref_price"}
-    old = pa.schema([f for f in contracts.CORPORATE_ACTIONS_SCHEMA if f.name not in new])
+    contract = contracts.CORPORATE_ACTIONS_SCHEMA
+    old = pa.schema(list(contract)[: contract.get_field_index("source_report")])  # before adjusted prices
     catalog = iceberg_io.get_catalog(settings)
     catalog.create_namespace_if_not_exists(settings.namespace)
     tbl = catalog.create_table(f"{settings.namespace}.corporate_actions", schema=old)

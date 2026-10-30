@@ -1,5 +1,5 @@
 # Local Airflow 3 for the TWSE pipeline, trimmed from the official docker-compose:
-# LocalExecutor (no Celery/Redis/worker), SimpleAuthManager (local only, no login), no triggerer.
+# LocalExecutor (no Celery/Redis/worker), SimpleAuthManager (local only), no triggerer (3.3 HITL needs none).
 # Every byte of state lives under ./.local (lake, logs) or the postgres-db volume inside Colima.
 #
 #   make up        # build image, deploy DAGs, start Airflow on http://localhost:8080
@@ -16,7 +16,11 @@ x-airflow-common: &airflow-common
   environment:
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__CORE__AUTH_MANAGER: airflow.api_fastapi.auth.managers.simple.simple_auth_manager.SimpleAuthManager
-    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+    # Named local logins, so a review decision records who made it (`make passwords`). On AWS the
+    # same field comes from the SSO / IAM identity of the MWAA web UI.
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "false"
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: "admin:admin,trader:user"
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE: /opt/airflow/auth/passwords.json
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
     AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:?run `make env` first}
@@ -37,6 +41,7 @@ x-airflow-common: &airflow-common
   volumes:
     - ./deploy/airflow_dags_mount:/opt/airflow/dags  # CD target, not the working tree
     - ./.local/airflow/logs:/opt/airflow/logs
+    - ./.local/airflow/auth:/opt/airflow/auth  # generated local passwords (gitignored)
     - ./.local/lake:/opt/airflow/lake
     - ./fixtures:/opt/airflow/fixtures:ro
     - ./scripts:/opt/airflow/scripts:ro
@@ -66,8 +71,8 @@ services:
     command:
       - -c
       - |
-        mkdir -p /opt/airflow/logs /opt/airflow/lake
-        chown -R "${AIRFLOW_UID:-50000}:0" /opt/airflow/logs /opt/airflow/lake
+        mkdir -p /opt/airflow/logs /opt/airflow/lake /opt/airflow/auth
+        chown -R "${AIRFLOW_UID:-50000}:0" /opt/airflow/logs /opt/airflow/lake /opt/airflow/auth
         exec /entrypoint airflow db migrate
     user: "0:0"
 
