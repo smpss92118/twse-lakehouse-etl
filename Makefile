@@ -1,16 +1,22 @@
 # Everything runs inside the project folder: .venv (uv), .local/ (lake, logs, caches), Docker (Colima VM).
 SHELL := /bin/bash
 export UV_CACHE_DIR := $(CURDIR)/.local/uv-cache
-export UV_PYTHON_DOWNLOADS := never
+# Uses an installed Python 3.12 if there is one; otherwise uv downloads it into the project folder.
+export UV_PYTHON_INSTALL_DIR := $(CURDIR)/.local/python
 
 COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo docker-compose)
 AIRFLOW := $(COMPOSE) exec -T airflow-scheduler
 DEMO := $(AIRFLOW) python /opt/airflow/scripts/demo_versioning.py
 DATE ?= 2026-10-29
 TABLE ?= daily_quotes
+VOLUME ?= 12345678
+STOCK ?= 2028
+START ?= 2026-10-22
+END ?= $(DATE)
+METHOD ?= backward
 
 .PHONY: help setup env lint test dag-test fixtures deploy deploy-from-ci build up down logs trigger status \
-	demo-snapshots demo-asof demo-correct demo-rollback demo-evolve dev-backfill clean \
+	demo-snapshots demo-asof demo-correct demo-rollback demo-evolve demo-adjusted review passwords dev-backfill clean \
 	bigdata-up bigdata-down trino-sql
 
 help: ## list targets
@@ -55,7 +61,7 @@ build: ## build the Airflow image
 	$(COMPOSE) build
 
 up: env deploy build ## start Airflow on http://localhost:8080
-	mkdir -p .local/airflow/logs .local/lake
+	mkdir -p .local/airflow/logs .local/airflow/auth .local/lake
 	$(COMPOSE) up -d --wait
 
 down: ## stop Airflow (data in .local/ is kept)
@@ -68,6 +74,13 @@ trigger: ## run the DAG for DATE (default 2026-10-29)
 	$(AIRFLOW) airflow dags unpause twse_daily_etl
 	$(AIRFLOW) airflow dags trigger twse_daily_etl --conf '{"trade_date": "$(DATE)"}'
 
+passwords: ## local Airflow logins (admin, trader), generated on first start
+	@cat .local/airflow/auth/passwords.json; echo
+
+review: ## ask a person to review a corporate action: STOCK=2762 DATE=2026-10-29 (Airflow UI > Required Actions)
+	$(AIRFLOW) airflow dags trigger twse_corporate_action_review \
+		--conf '{"items": [{"trade_date": "$(DATE)", "stock_id": "$(STOCK)"}]}'
+
 status: ## task states of recent runs
 	$(AIRFLOW) airflow dags list-runs twse_daily_etl
 
@@ -75,16 +88,21 @@ demo-snapshots: ## [required] snapshot list of TABLE
 	$(DEMO) snapshots --table $(TABLE)
 
 demo-asof: ## [required] time travel: SNAPSHOT=<id> or AT='2026-10-30 18:00'
+	$(if $(or $(SNAPSHOT),$(AT)),,$(error give SNAPSHOT=<id> or AT='YYYY-MM-DD HH:MM'))
 	$(DEMO) as-of --table $(TABLE) $(if $(SNAPSHOT),--snapshot-id $(SNAPSHOT),--at "$(AT)") --stock 2330 2317
 
-demo-correct: ## [required] simulate a TWSE correction of DATE, show before/after
-	$(DEMO) correct --date $(DATE) --stock 2330
+demo-correct: ## [required] simulate a TWSE correction of DATE (2330 volume -> VOLUME), show before/after
+	$(DEMO) correct --date $(DATE) --stock 2330 --volume $(VOLUME)
 
-demo-rollback: ## [optional] roll TABLE back to before the last run
-	$(DEMO) rollback --table $(TABLE)
+demo-rollback: ## [optional] undo the last run in every table it wrote (or only TABLE=...)
+	$(DEMO) rollback $(if $(filter command line,$(origin TABLE)),--table $(TABLE))
 
 demo-evolve: ## [optional] add a column; old rows and snapshots stay queryable
 	$(DEMO) add-column --table $(TABLE)
+
+demo-adjusted: ## adjusted prices at query time: STOCK=2028 START=2026-10-22 END=2026-10-29 [METHOD=forward]
+	$(DEMO) adjusted --stock $(STOCK) --start $(START) --end $(END) --method $(METHOD) \
+		$(if $(SNAPSHOT),--snapshot-id $(SNAPSHOT))
 
 dev-backfill: ## run the pipeline without Airflow on fixtures into .local/dev
 	TWSE_SOURCE=fixture uv run python -m twse_etl.pipeline backfill --start 2026-10-22 --end 2026-10-29
@@ -95,7 +113,7 @@ clean: ## delete local lake + logs (asks first)
 BIGDATA := $(COMPOSE) -f docker-compose.yaml -f docker-compose.bigdata.yaml
 
 bigdata-up: env deploy build ## big-data layout: S3 (SeaweedFS) + Postgres Iceberg catalog + Trino on :8081
-	mkdir -p .local/airflow/logs .local/lake .local/object-store
+	mkdir -p .local/airflow/logs .local/airflow/auth .local/lake .local/object-store
 	$(BIGDATA) up -d --wait
 
 bigdata-down: ## stop the big-data layout

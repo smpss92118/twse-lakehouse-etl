@@ -23,25 +23,42 @@ TRADE_DATES = [
     "2026-03-17",  # 2330 ex-dividend: MI_INDEX shows change sign "X"
     "2026-10-22",
     "2026-10-23",
-    "2026-10-27",  # previous trading day is 10-23; 10-26 is a make-up holiday
+    "2026-10-27",  # previous trading day is 10-23; 10-26 is a make-up holiday; 1516, 6142 resume after reduction
     "2026-10-28",
     "2026-10-29",
+]
+# Corporate actions the main window lacks, for unit tests of splits and capital reductions.
+EVENT_DATES = [
+    "2025-06-10",  # 0050's last close before its 1:4 split halt
+    "2025-06-17",  # previous trading day of the resumption (0050 still halted)
+    "2025-06-18",  # 0050 resumes; not marked X, so close - change = opening reference price
+    "2025-06-23",  # 2371 resumes after a capital reduction with a cash refund; marked X
 ]
 HOLIDAY_YEARS = [2024, 2026]
 
 
+def _record(fixture_dir: Path, settings: Settings, report: str, d: date, key: str | None = None) -> dict:
+    path = sources.fixture_path(fixture_dir, report, d, key)
+    if path.exists():
+        return json.loads(gzip.decompress(path.read_bytes()))
+    payload = sources.fetch(report, d, settings, key=key)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(gzip.compress(payload.body, mtime=0))
+    print(f"{report:13s} {key or d}  stat={payload.json().get('stat')!r:12}  {len(payload.body):>8} bytes")
+    return payload.json()
+
+
 def record_twse(fixture_dir: Path) -> None:
     settings = Settings.from_env().with_overrides(source="twse")
-    jobs = [(r, date.fromisoformat(d)) for d in TRADE_DATES for r in ("MI_INDEX", "T86", "TWT49U")]
-    jobs += [("HOLIDAY", date(y, 1, 1)) for y in HOLIDAY_YEARS]
+    jobs = [(r, d) for d in TRADE_DATES for r in ("MI_INDEX", "T86", *sources.RANGE_REPORTS)]
+    jobs += [(r, d) for d in EVENT_DATES for r in ("MI_INDEX", *sources.RANGE_REPORTS)]
     for report, d in jobs:
-        path = sources.fixture_path(fixture_dir, report, d)
-        if path.exists():
-            continue
-        payload = sources.fetch(report, d, settings)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(gzip.compress(payload.body, mtime=0))
-        print(f"{report:9s} {d}  stat={payload.json().get('stat')!r:12}  {len(payload.body):>8} bytes")
+        doc = _record(fixture_dir, settings, report, date.fromisoformat(d))
+        if report in sources.DETAIL_REPORTS:
+            for key in sources.detail_keys(doc):
+                _record(fixture_dir, settings, sources.DETAIL_REPORTS[report], date.fromisoformat(d), key)
+    for year in HOLIDAY_YEARS:
+        _record(fixture_dir, settings, "HOLIDAY", date(year, 1, 1))
 
 
 def record_vendor(vendor_src: Path, vendor_dir: Path) -> None:

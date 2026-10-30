@@ -20,10 +20,10 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import polars as pl
-from pyiceberg.table.snapshots import ancestors_of
+from pyiceberg.table.snapshots import Operation, ancestors_of
 from pyiceberg.types import StringType
 
-from twse_etl import iceberg_io, pipeline, storage
+from twse_etl import adjust, iceberg_io, pipeline
 from twse_etl.config import Settings
 
 TPE = ZoneInfo("Asia/Taipei")
@@ -72,13 +72,24 @@ def cmd_snapshots(args, settings: Settings) -> None:
 
 def _resolve_snapshot(tbl, snapshot_id: int | None, at: str | None) -> int:
     if snapshot_id:
-        return snapshot_id
-    ts = datetime.fromisoformat(at)
-    ts = ts if ts.tzinfo else ts.replace(tzinfo=TPE)
-    snap = tbl.snapshot_as_of_timestamp(int(ts.timestamp() * 1000))
-    if snap is None:
-        raise SystemExit(f"table did not exist yet at {ts}")
-    return snap.snapshot_id
+        sid = snapshot_id
+    else:
+        ts = datetime.fromisoformat(at)
+        ts = ts if ts.tzinfo else ts.replace(tzinfo=TPE)
+        snap = tbl.snapshot_as_of_timestamp(int(ts.timestamp() * 1000))
+        if snap is None:
+            raise SystemExit(f"table did not exist yet at {ts}")
+        sid = snap.snapshot_id
+    # An overwrite commits delete + append atomically; nobody ever read the state between the two.
+    snap = tbl.snapshot_by_id(sid)
+    if snap is not None and snap.summary and snap.summary.operation == Operation.DELETE:
+        run_id = snap.summary.get("run_id")
+        children = (s for s in tbl.snapshots() if s.parent_snapshot_id == sid)
+        half = next((s for s in children if s.summary.get("run_id") == run_id), None)
+        if half is not None:
+            print(f"note: {sid} is the delete half of an overwrite; readers saw its append half {half.snapshot_id}")
+            sid = half.snapshot_id
+    return sid
 
 
 def cmd_as_of(args, settings: Settings) -> None:
@@ -100,22 +111,14 @@ def cmd_as_of(args, settings: Settings) -> None:
     print(df.select(cols).sort("trade_date", "stock_id").head(args.limit))
 
 
-def _latest_bronze(settings: Settings, report: str, d: date) -> bytes:
-    prefix = storage.join(settings.data_uri, "bronze", report, f"trade_date={d}")
-    files = [u for u in storage.list_files(prefix, ".json") if not u.endswith(".meta.json")]
-    if not files:
-        raise SystemExit(f"no Bronze file for {report} {d}; run the pipeline for that day first")
-    return storage.read_bytes(files[-1])
-
-
 def cmd_correct(args, settings: Settings) -> None:
     """Re-ingest a day where TWSE 'corrected' one stock's traded volume. Same code path as a
-    scheduled run; the other two reports are byte-identical, so they produce no new snapshot."""
+    scheduled run; the other reports parse to identical content, so they produce no new snapshot."""
     d, stock = args.date, args.stock
     quotes_tbl = iceberg_io.get_table(settings, "daily_quotes")
     before = iceberg_io.current_version(quotes_tbl, d)
 
-    doc = json.loads(_latest_bronze(settings, "MI_INDEX", d))
+    doc = json.loads(pipeline.latest_bronze(settings, "MI_INDEX", d))
     table = next(t for t in doc["tables"] if "證券代號" in (t.get("fields") or []))
     col = table["fields"].index("成交股數")
     row = next(r for r in table["data"] if r[0].strip() == stock)
@@ -125,12 +128,12 @@ def cmd_correct(args, settings: Settings) -> None:
 
     bodies = {
         "MI_INDEX": json.dumps(doc, ensure_ascii=False).encode(),
-        "T86": _latest_bronze(settings, "T86", d),
-        "TWT49U": _latest_bronze(settings, "TWT49U", d),
+        "T86": pipeline.latest_bronze(settings, "T86", d),
+        pipeline.CORPORATE_ACTIONS: pipeline.latest_bronze(settings, pipeline.CORPORATE_ACTIONS, d),
     }
     result = pipeline.run_day(d, settings, run_id=f"correction__{datetime.now(TPE):%Y%m%dT%H%M%S}", bodies=bodies)
     for name, res in result["published"].items():
-        outcome = "skipped (identical source)" if res["skipped"] else f"new snapshot {res['snapshot_id']}"
+        outcome = "skipped (identical content)" if res["skipped"] else f"new snapshot {res['snapshot_id']}"
         print(f"  {name:20s} {outcome}")
 
     quotes_tbl.refresh()
@@ -142,22 +145,49 @@ def cmd_correct(args, settings: Settings) -> None:
         print(f"{label} snapshot {snap.snapshot_id}: volume_shares={v['volume_shares'][0]:,}  run_id={v['run_id'][0]}")
 
 
-def cmd_rollback(args, settings: Settings) -> None:
-    tbl = iceberg_io.get_table(settings, args.table)
+def _before_run(tbl, run_id: str) -> int | None:
+    """Newest ancestor not written by run_id, i.e. the table as it was before that run."""
     head = tbl.current_snapshot()
+    if head is None or head.summary.get("run_id") != run_id:
+        return None  # that run did not change this table (identical content is skipped)
+    return next((s.snapshot_id for s in ancestors_of(head, tbl.metadata) if s.summary.get("run_id") != run_id), None)
+
+
+def cmd_rollback(args, settings: Settings) -> None:
+    """Undo the last run everywhere it wrote, Gold included: rolling back Silver alone would leave
+    the merged table the strategy team reads on the bad version."""
     if args.snapshot_id:
-        target = args.snapshot_id
-    else:  # state before the last run's commit: skip every snapshot written by the head's run_id
-        run_id = head.summary.get("run_id")
-        target = next(
-            (s.snapshot_id for s in ancestors_of(head, tbl.metadata) if s.summary.get("run_id") != run_id), None
-        )
+        if not args.table:
+            raise SystemExit("--snapshot-id needs --table")
+        targets = {args.table: args.snapshot_id}
+    else:
+        names = [args.table] if args.table else list(iceberg_io.SCHEMAS)
+        anchor = iceberg_io.get_table(settings, args.table or pipeline.GOLD_TABLE).current_snapshot()
+        if anchor is None:
+            raise SystemExit("nothing to roll back")
+        run_id = anchor.summary.get("run_id")
+        print(f"rolling back run {run_id}")
+        targets = {name: _before_run(iceberg_io.get_table(settings, name), run_id) for name in names}
+    for name, target in targets.items():
+        tbl = iceberg_io.get_table(settings, name)
         if target is None:
-            raise SystemExit("nothing to roll back to")
-    tbl.manage_snapshots().rollback_to_snapshot(target).commit()
-    print(f"twse.{args.table}: current snapshot {head.snapshot_id} -> {tbl.current_snapshot().snapshot_id}")
-    print("data files are untouched; the rolled-back snapshot stays in history until expire_snapshots")
-    print(snapshot_frame(tbl).tail(6))
+            print(f"  twse.{name:20s} unchanged (not written by that run, or no earlier snapshot)")
+            continue
+        before = tbl.current_snapshot().snapshot_id
+        tbl.manage_snapshots().rollback_to_snapshot(target).commit()
+        print(f"  twse.{name:20s} current snapshot {before} -> {tbl.current_snapshot().snapshot_id}")
+    print("data files are untouched; rolled-back snapshots stay in history until expire_snapshots")
+
+
+def cmd_adjusted(args, settings: Settings) -> None:
+    """Adjusted prices from printed prices x the stored per-day factors; nothing stored is rewritten."""
+    tbl = iceberg_io.get_table(settings, pipeline.GOLD_TABLE)
+    wide = iceberg_io.read(tbl, args.start, args.end, snapshot_id=args.snapshot_id)
+    out = adjust.adjust(wide.filter(pl.col("stock_id") == args.stock), args.method)
+    version = f"snapshot {args.snapshot_id}" if args.snapshot_id else "current version"
+    print(f"{args.stock} {args.start}..{args.end}, {args.method}-adjusted, {version}")
+    cols = ["trade_date", "close", "change_sign", "price_change", "corporate_action", "adj_factor", "close_adj"]
+    print(out.select(c for c in cols if c in out.columns))
 
 
 def cmd_add_column(args, settings: Settings) -> None:
@@ -200,8 +230,15 @@ def main() -> None:
     p.add_argument("--volume", type=int, default=12_345_678)
 
     p = sub.add_parser("rollback")
-    p.add_argument("--table", choices=tables, default="daily_quotes")
+    p.add_argument("--table", choices=tables, help="default: every table the last run wrote, Gold included")
     p.add_argument("--snapshot-id", type=int)
+
+    p = sub.add_parser("adjusted")
+    p.add_argument("--stock", required=True)
+    p.add_argument("--start", type=date.fromisoformat, required=True)
+    p.add_argument("--end", type=date.fromisoformat, required=True)
+    p.add_argument("--method", choices=["backward", "forward"], default="backward")
+    p.add_argument("--snapshot-id", type=int, help="read Gold as of this snapshot (point-in-time)")
 
     p = sub.add_parser("add-column")
     p.add_argument("--table", choices=tables, default="daily_quotes")
@@ -213,6 +250,7 @@ def main() -> None:
         "as-of": cmd_as_of,
         "correct": cmd_correct,
         "rollback": cmd_rollback,
+        "adjusted": cmd_adjusted,
         "add-column": cmd_add_column,
     }
     handlers[args.cmd](args, Settings.from_env())
