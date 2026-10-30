@@ -3,6 +3,7 @@
 #   object store  SeaweedFS (S3 API)        stands in for S3
 #   catalog       Postgres (Iceberg JDBC)   multi-writer, shared by PyIceberg and Trino
 #   query engine  Trino                     SQL for the strategy team, scales out by adding workers
+#   SQL web UI    CloudBeaver               http://localhost:8978, read-only connection to Trino, no login to query
 #
 # The pipeline code is unchanged: only ICEBERG_* / PYICEBERG_* environment values differ.
 # Credentials below are throwaway values for containers on this machine, not real keys.
@@ -43,6 +44,24 @@ services:
       test: ["CMD", "pg_isready", "-U", "iceberg"]
       interval: 5s
       retries: 10
+
+  sql-ui:  # DBeaver in the browser; the Trino connection comes preconfigured and read-only
+    image: dbeaver/cloudbeaver:26.2.2
+    ports:
+      - "8978:8978"
+    environment:
+      # First start configures itself (no setup wizard); the admin login is only for settings.
+      CB_SERVER_NAME: TWSE SQL
+      CB_ADMIN_NAME: cbadmin
+      CB_ADMIN_PASSWORD: ${CLOUDBEAVER_ADMIN_PASSWORD:-}
+      CLOUDBEAVER_APP_GRANT_CONNECTIONS_ACCESS_TO_ANONYMOUS_TEAM: "true"
+    volumes:
+      # Copied into the workspace on the first start only; delete .local/cloudbeaver to re-apply.
+      - ./docker/cloudbeaver/initial-data-sources.conf:/opt/cloudbeaver/conf/initial-data-sources.conf:ro
+      - ./.local/cloudbeaver:/opt/cloudbeaver/workspace
+    depends_on:
+      trino:
+        condition: service_healthy
 
   trino:
     image: trinodb/trino:479

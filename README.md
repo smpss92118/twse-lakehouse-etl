@@ -56,6 +56,34 @@ open http://localhost:8080
 所有狀態都在 `.local/`（Iceberg warehouse、Bronze、log、uv cache），`make clean` 一次清掉；
 Airflow metadata DB 在 Colima VM 內的 docker volume。
 
+### 開關服務
+
+由外往內開、由內往外關。關閉不會刪資料，下次開起來從原狀繼續。
+
+| 層級 | 開 | 關 |
+|---|---|---|
+| Docker 虛擬機（Colima，約 8 GB 記憶體） | `colima start --cpu 4 --memory 8` | `colima stop`（先關下面的服務） |
+| 預設配置：Airflow + Postgres，SQLite catalog | `make up` | `make down` |
+| big-data 配置：上面再加 S3、Iceberg catalog、Trino、SQL 網頁 | `make bigdata-up` | `make bigdata-down` |
+| big-data 配置裡的單一服務 | `make start SVC=<服務>` | `make stop SVC=<服務>` |
+
+兩種配置用的是不同的資料湖（第 3 節），同一時間只開一種。`make services` 列出所有服務與目前狀態：
+
+| 服務（`SVC=`） | 網址 | 做什麼 |
+|---|---|---|
+| `airflow-apiserver` | http://localhost:8080 | Airflow 網頁與 API（`make passwords` 看帳密） |
+| `airflow-scheduler` | | 排程、執行 task |
+| `airflow-dag-processor` | | 解析 DAG 檔 |
+| `postgres` | | Airflow 自己的資料庫 |
+| `object-store` | | S3（SeaweedFS），存 Iceberg 資料檔 |
+| `iceberg-catalog-db` | | Iceberg catalog（Postgres） |
+| `trino` | http://localhost:8081 | SQL 查詢引擎（`make trino-sql`；網頁只能看查詢狀態） |
+| `sql-ui` | http://localhost:8978 | SQL 網頁（CloudBeaver，`make sql-ui` 開啟） |
+
+`make services` 還會列出 `airflow-init`：每次啟動時做一次資料庫遷移就結束，不是常駐服務，不用另外開關。
+例如只想暫時關掉 SQL 網頁：`make stop SVC=sql-ui`，再開：`make start SVC=sql-ui`。
+開某個服務時，它依賴的服務也會一起開（例如 `sql-ui` 會帶起 `trino`、`object-store`、`iceberg-catalog-db`）。
+
 | 變數（`.env`） | 預設 | 用途 |
 |---|---|---|
 | `TWSE_SOURCE` | `twse` | `twse` 打真實 API；`fixture` 讀 `fixtures/` 錄好的原始回應（離線 / 被限流時） |
@@ -126,7 +154,7 @@ after  snapshot 1729039165247099125: volume_shares=12,345,678
 預設配置（SQLite catalog + 本機檔案）只能用 Python 讀。要讓策略團隊下 SQL，或資料量變大時：
 
 ```bash
-make bigdata-up      # 疊加 docker-compose.bigdata.yaml：SeaweedFS（S3 API）+ Postgres（Iceberg JDBC catalog）+ Trino :8081
+make bigdata-up      # 疊加 docker-compose.bigdata.yaml：SeaweedFS（S3 API）+ Postgres（Iceberg JDBC catalog）+ Trino :8081 + SQL 網頁 :8978
 make trigger DATE=2026-10-29
 make trino-sql SQL='SELECT trade_date, count(*) FROM iceberg.twse.daily_market_wide GROUP BY 1'
 make trino-sql SQL='SELECT snapshot_id, operation, summary FROM iceberg.twse."daily_quotes$snapshots"'
@@ -141,8 +169,11 @@ make bigdata-down
 - 這套的資料在 `.local/object-store/`，和預設配置的 `.local/lake/` 是分開的兩個資料湖。
   Bronze / staging 仍寫本機（`TWSE_DATA_URI`），上雲時同樣改成 `s3://`。
 - 本機 S3 的 key `local-dev` 只在這幾個容器之間有效（object store 不對外開 port），不是真的憑證。
-- UI：DBeaver（免費桌面版，內建 Trino driver）連 `localhost:8081`，使用者名稱隨意、免密碼，可下 SQL、瀏覽、匯出 CSV / Excel。
-  要給團隊用網頁時再加 Superset 或 Metabase 一個服務。量再大時 Trino 加 worker；Spark 也能接同一個 JDBC catalog。
+- **網頁 UI**：`make sql-ui` 開 http://localhost:8978 （CloudBeaver，DBeaver 的網頁版）。連線已預先設好、免登入，
+  左側 `TWSE Iceberg (Trino)` → `iceberg` → `twse` 點表就能看資料，也能開 SQL 編輯器、匯出 CSV / Excel。
+  連線是唯讀的：資料湖只由 pipeline 寫入。管理員帳號 `cbadmin` 只用來改設定，密碼在 `.env`（`make env` 隨機產生）。
+- 桌面版 DBeaver 也可以：新增 Trino 連線，`localhost:8081`，使用者名稱隨意、免密碼。量再大時 Trino 加 worker；
+  Spark 也能接同一個 JDBC catalog。
 
 ## 4. 測試
 
