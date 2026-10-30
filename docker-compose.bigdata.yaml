@@ -1,0 +1,89 @@
+# Opt-in "big data" layout, layered on docker-compose.yaml:  make bigdata-up
+#
+#   object store  SeaweedFS (S3 API)        stands in for S3
+#   catalog       Postgres (Iceberg JDBC)   multi-writer, shared by PyIceberg and Trino
+#   query engine  Trino                     SQL for the strategy team, scales out by adding workers
+#
+# The pipeline code is unchanged: only ICEBERG_* / PYICEBERG_* environment values differ.
+# Credentials below are throwaway values for containers on this machine, not real keys.
+
+x-iceberg-s3-env: &iceberg-s3-env
+  ICEBERG_CATALOG_URI: postgresql+psycopg2://iceberg:iceberg@iceberg-catalog-db/iceberg
+  ICEBERG_WAREHOUSE: s3://warehouse
+  PYICEBERG_CATALOG__TWSE__S3__ENDPOINT: http://object-store:8333
+  PYICEBERG_CATALOG__TWSE__S3__REGION: us-east-1
+  PYICEBERG_CATALOG__TWSE__S3__ACCESS_KEY_ID: local-dev
+  PYICEBERG_CATALOG__TWSE__S3__SECRET_ACCESS_KEY: local-dev
+  PYICEBERG_CATALOG__TWSE__S3__FORCE_VIRTUAL_ADDRESSING: "false"
+
+services:
+  object-store:
+    image: chrislusf/seaweedfs:3.97
+    # s3.json declares the local-dev key; without it signed requests are rejected as unknown keys
+    command: server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -master.volumeSizeLimitMB=1024
+    volumes:
+      - ./.local/object-store:/data
+      - ./docker/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      # 127.0.0.1, not localhost: busybox resolves localhost to ::1 and S3 listens on IPv4 only
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8333/status || exit 1"]
+      interval: 5s
+      retries: 20
+      start_period: 20s
+
+  iceberg-catalog-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: iceberg
+      POSTGRES_PASSWORD: iceberg
+      POSTGRES_DB: iceberg
+    volumes:
+      - iceberg-catalog-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "iceberg"]
+      interval: 5s
+      retries: 10
+
+  trino:
+    image: trinodb/trino:479
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./docker/trino/catalog:/etc/trino/catalog:ro
+    depends_on:
+      object-store:
+        condition: service_healthy
+      iceberg-catalog-db:
+        condition: service_healthy
+
+  airflow-init:
+    environment:
+      <<: *iceberg-s3-env
+    command:
+      - -c
+      - |
+        mkdir -p /opt/airflow/logs /opt/airflow/lake
+        chown -R "${AIRFLOW_UID:-50000}:0" /opt/airflow/logs /opt/airflow/lake
+        code=$$(curl -s -o /dev/null -w '%{http_code}' -X PUT --aws-sigv4 "aws:amz:us-east-1:s3" \
+          --user "$${PYICEBERG_CATALOG__TWSE__S3__ACCESS_KEY_ID}:$${PYICEBERG_CATALOG__TWSE__S3__SECRET_ACCESS_KEY}" \
+          http://object-store:8333/warehouse)
+        case "$$code" in 200|409) ;; *) echo "creating bucket warehouse failed: HTTP $$code"; exit 1 ;; esac
+        exec /entrypoint airflow db migrate
+    depends_on:
+      object-store:
+        condition: service_healthy
+      iceberg-catalog-db:
+        condition: service_healthy
+
+  airflow-apiserver:
+    environment:
+      <<: *iceberg-s3-env
+  airflow-scheduler:
+    environment:
+      <<: *iceberg-s3-env
+  airflow-dag-processor:
+    environment:
+      <<: *iceberg-s3-env
+
+volumes:
+  iceberg-catalog-volume:

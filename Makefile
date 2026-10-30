@@ -10,7 +10,8 @@ DATE ?= 2026-10-29
 TABLE ?= daily_quotes
 
 .PHONY: help setup env lint test dag-test fixtures deploy deploy-from-ci build up down logs trigger status \
-	demo-snapshots demo-asof demo-correct demo-rollback demo-evolve dev-backfill clean
+	demo-snapshots demo-asof demo-correct demo-rollback demo-evolve dev-backfill clean \
+	bigdata-up bigdata-down trino-sql
 
 help: ## list targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -90,3 +91,18 @@ dev-backfill: ## run the pipeline without Airflow on fixtures into .local/dev
 
 clean: ## delete local lake + logs (asks first)
 	@read -p "delete .local/lake .local/dev .local/airflow? [y/N] " ok && [ "$$ok" = y ] && rm -rf .local/lake .local/dev .local/airflow
+
+BIGDATA := $(COMPOSE) -f docker-compose.yaml -f docker-compose.bigdata.yaml
+
+bigdata-up: env deploy build ## big-data layout: S3 (SeaweedFS) + Postgres Iceberg catalog + Trino on :8081
+	mkdir -p .local/airflow/logs .local/lake .local/object-store
+	$(BIGDATA) up -d --wait
+
+bigdata-down: ## stop the big-data layout
+	$(BIGDATA) down
+
+# $(value SQL) passes the text unexpanded, so metadata tables like "daily_quotes$snapshots" survive make
+trino-sql: export TRINO_SQL = $(value SQL)
+trino-sql: ## SQL on Trino: make trino-sql SQL='select * from iceberg.twse."daily_quotes$snapshots"'
+	set -o pipefail; $(BIGDATA) exec -T -e TRINO_SQL trino sh -c 'trino --output-format ALIGNED --execute "$$TRINO_SQL"' \
+		2>&1 | grep -v -e 'org.jline' -e 'Unable to create a system terminal'
