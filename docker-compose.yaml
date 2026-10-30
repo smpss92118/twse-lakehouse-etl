@@ -1,0 +1,122 @@
+# Local Airflow 3 for the TWSE pipeline, trimmed from the official docker-compose:
+# LocalExecutor (no Celery/Redis/worker), SimpleAuthManager (local only, no login), no triggerer.
+# Every byte of state lives under ./.local (lake, logs) or the postgres-db volume inside Colima.
+#
+#   make up        # build image, deploy DAGs, start Airflow on http://localhost:8080
+#   make trigger DATE=2026-10-29
+
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+  image: twse-airflow:local
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.api_fastapi.auth.managers.simple.simple_auth_manager.SimpleAuthManager
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:?run `make env` first}
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL: "30"
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+    # Pipeline settings. Moving to AWS changes only these values (see README "AWS").
+    PYTHONPATH: /opt/airflow/dags
+    TWSE_SOURCE: ${TWSE_SOURCE:-twse}
+    TWSE_DATA_URI: /opt/airflow/lake/data
+    ICEBERG_WAREHOUSE: /opt/airflow/lake/warehouse
+    ICEBERG_CATALOG_TYPE: sql
+    ICEBERG_CATALOG_URI: ${ICEBERG_CATALOG_URI:-sqlite:////opt/airflow/lake/warehouse/catalog.db}
+    TWSE_FIXTURE_DIR: /opt/airflow/fixtures/twse
+    VENDOR_CORP_ACTIONS_DIR: /opt/airflow/fixtures/vendor
+  volumes:
+    - ./deploy/airflow_dags_mount:/opt/airflow/dags  # CD target, not the working tree
+    - ./.local/airflow/logs:/opt/airflow/logs
+    - ./.local/lake:/opt/airflow/lake
+    - ./fixtures:/opt/airflow/fixtures:ro
+    - ./scripts:/opt/airflow/scripts:ro
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on: &airflow-depends-on
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 10
+    restart: always
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        mkdir -p /opt/airflow/logs /opt/airflow/lake
+        chown -R "${AIRFLOW_UID:-50000}:0" /opt/airflow/logs /opt/airflow/lake
+        exec /entrypoint airflow db migrate
+    user: "0:0"
+
+  airflow-apiserver:
+    <<: *airflow-common
+    command: api-server
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: dag-processor
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type DagProcessorJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-db-volume:

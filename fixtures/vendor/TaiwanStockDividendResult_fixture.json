@@ -1,0 +1,161 @@
+{
+ "msg": "fixture subset of FinMind TaiwanStockDividendResult",
+ "data": [
+  {
+   "date": "2026-10-22",
+   "stock_id": "0056",
+   "before_price": 58.75,
+   "after_price": 57.03,
+   "stock_and_cache_dividend": 1.72,
+   "stock_or_cache_dividend": "息",
+   "max_price": 62.7,
+   "min_price": 51.35,
+   "open_price": 57.05,
+   "reference_price": 57.03
+  },
+  {
+   "date": "2026-10-22",
+   "stock_id": "00719B",
+   "before_price": 31.68,
+   "after_price": 31.41,
+   "stock_and_cache_dividend": 0.27,
+   "stock_or_cache_dividend": "除息",
+   "max_price": 9999.95,
+   "min_price": 0.01,
+   "open_price": 31.41,
+   "reference_price": 31.41
+  },
+  {
+   "date": "2026-10-22",
+   "stock_id": "00720B",
+   "before_price": 31.88,
+   "after_price": 31.42,
+   "stock_and_cache_dividend": 0.46,
+   "stock_or_cache_dividend": "除息",
+   "max_price": 9999.95,
+   "min_price": 0.01,
+   "open_price": 31.42,
+   "reference_price": 31.42
+  },
+  {
+   "date": "2026-10-22",
+   "stock_id": "00788B",
+   "before_price": 29.33,
+   "after_price": 28.96,
+   "stock_and_cache_dividend": 0.37,
+   "stock_or_cache_dividend": "除息",
+   "max_price": 9999.95,
+   "min_price": 0.01,
+   "open_price": 28.96,
+   "reference_price": 28.96
+  },
+  {
+   "date": "2026-10-22",
+   "stock_id": "00834B",
+   "before_price": 33.11,
+   "after_price": 32.7,
+   "stock_and_cache_dividend": 0.415,
+   "stock_or_cache_dividend": "除息",
+   "max_price": 9999.95,
+   "min_price": 0.01,
+   "open_price": 32.7,
+   "reference_price": 32.7
+  },
+  {
+   "date": "2026-10-22",
+   "stock_id": "00870B",
+   "before_price": 27.12,
+   "after_price": 26.74,
+   "stock_and_cache_dividend": 0.38,
+   "stock_or_cache_dividend": "除息",
+   "max_price": 9999.95,
+   "min_price": 0.01,
+   "open_price": 26.74,
+   "reference_price": 26.74
+  },
+  {
+   "date": "2026-10-22",
+   "stock_id": "00967B",
+   "before_price": 8.87,
+   "after_price": 8.84,
+   "stock_and_cache_dividend": 0.033,
+   "stock_or_cache_dividend": "除息",
+   "max_price": 9999.95,
+   "min_price": 0.01,
+   "open_price": 8.84,
+   "reference_price": 8.84
+  },
+  {
+   "date": "2026-10-22",
+   "stock_id": "00968B",
+   "before_price": 8.9,
+   "after_price": 8.86,
+   "stock_and_cache_dividend": 0.043,
+   "stock_or_cache_dividend": "除息",
+   "max_price": 9999.95,
+   "min_price": 0.01,
+   "open_price": 8.86,
+   "reference_price": 8.86
+  },
+  {
+   "date": "2026-10-22",
+   "stock_id": "00981B",
+   "before_price": 9.0,
+   "after_price": 8.94,
+   "stock_and_cache_dividend": 0.063,
+   "stock_or_cache_dividend": "除息",
+   "max_price": 9999.95,
+   "min_price": 0.01,
+   "open_price": 8.94,
+   "reference_price": 8.94
+  },
+  {
+   "date": "2026-10-22",
+   "stock_id": "8102",
+   "before_price": 56.9,
+   "after_price": 56.0,
+   "stock_and_cache_dividend": 0.9,
+   "stock_or_cache_dividend": "除息",
+   "max_price": 61.6,
+   "min_price": 50.4,
+   "open_price": 56.0,
+   "reference_price": 56.0
+  },
+  {
+   "date": "2026-10-22",
+   "stock_id": "8936",
+   "before_price": 51.2,
+   "after_price": 48.2,
+   "stock_and_cache_dividend": 3.0,
+   "stock_or_cache_dividend": "除息",
+   "max_price": 53.0,
+   "min_price": 43.4,
+   "open_price": 48.2,
+   "reference_price": 48.2
+  },
+  {
+   "date": "2026-10-23",
+   "stock_id": "2028",
+   "before_price": 16.55,
+   "after_price": 16.35,
+   "stock_and_cache_dividend": 0.2,
+   "stock_or_cache_dividend": "息",
+   "max_price": 17.95,
+   "min_price": 14.75,
+   "open_price": 16.35,
+   "reference_price": 16.35
+  },
+  {
+   "date": "2026-10-23",
+   "stock_id": "6931",
+   "before_price": 37.5,
+   "after_price": 37.38,
+   "stock_and_cache_dividend": 0.12,
+   "stock_or_cache_dividend": "息",
+   "max_price": 41.1,
+   "min_price": 33.65,
+   "open_price": 37.4,
+   "reference_price": 37.38
+  }
+ ]
+}

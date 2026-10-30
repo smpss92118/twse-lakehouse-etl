@@ -1,0 +1,56 @@
+name: CD
+
+# Runs only after CI succeeded on main, i.e. after a reviewed merge.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-dags
+  cancel-in-progress: false
+
+jobs:
+  deploy-bundle:
+    name: Sync dags/ to the Airflow DAGs folder
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Deploy (same script as `make deploy` on the Airflow host)
+        env:
+          DEPLOY_LOG: ${{ runner.temp }}/cd/deploy.log
+        run: scripts/deploy_dags.sh "${{ runner.temp }}/cd/airflow_dags"
+      - name: Record what was deployed
+        run: find "${{ runner.temp }}/cd/airflow_dags" -type f | sort | tee -a "${{ runner.temp }}/cd/deploy.log"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: airflow-dags-${{ github.event.workflow_run.head_sha || github.sha }}
+          path: ${{ runner.temp }}/cd
+          retention-days: 30
+
+  # Same bundle to Amazon MWAA. Off until the repo variables below exist; no secrets in the repo:
+  # GitHub OIDC assumes an IAM role that may only write the MWAA bucket's dags/ prefix.
+  deploy-aws:
+    name: Sync bundle to MWAA (S3)
+    needs: deploy-bundle
+    if: vars.DEPLOY_TARGET == 'aws'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - run: |
+          scripts/deploy_dags.sh "${{ runner.temp }}/bundle"
+          aws s3 sync "${{ runner.temp }}/bundle" "s3://${{ vars.MWAA_BUCKET }}/dags/" --delete

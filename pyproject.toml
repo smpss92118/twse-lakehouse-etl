@@ -1,0 +1,42 @@
+[project]
+name = "twse-etl"
+version = "0.1.0"
+description = "Daily TWSE closing quotes + institutional flows into Iceberg, orchestrated by Airflow"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pyiceberg[sql-sqlite,pyarrow]>=0.12,<0.13",
+    "polars>=1.30",
+    "duckdb>=1.3",
+    "requests>=2.32",
+    "anthropic>=0.60",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.12",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/twse_etl"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "airflow: needs apache-airflow; runs inside the production Docker image",
+]
+addopts = "-m 'not airflow'"
+filterwarnings = ["ignore:Delete operation did not match any records:UserWarning"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
