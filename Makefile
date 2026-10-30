@@ -17,7 +17,7 @@ METHOD ?= backward
 
 .PHONY: help setup env lint test dag-test fixtures deploy deploy-from-ci build up down logs trigger status \
 	demo-snapshots demo-asof demo-correct demo-rollback demo-evolve demo-adjusted review passwords dev-backfill clean \
-	bigdata-up bigdata-down trino-sql
+	bigdata-up bigdata-down trino-sql sql-ui start stop services
 
 help: ## list targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -33,6 +33,7 @@ env: ## create .env with fresh local-only secrets (gitignored)
 	    echo "TWSE_SOURCE=twse"; \
 	    echo "# ANTHROPIC_API_KEY=   # enables the LLM unscheduled-closure check"; } > .env; \
 	  echo "created .env"; fi
+	@grep -q '^CLOUDBEAVER_ADMIN_PASSWORD=' .env || echo "CLOUDBEAVER_ADMIN_PASSWORD=Cb1$$(openssl rand -hex 12)" >> .env
 
 lint: ## ruff lint + format check
 	uv run ruff check . && uv run ruff format --check .
@@ -113,11 +114,27 @@ clean: ## delete local lake + logs (asks first)
 BIGDATA := $(COMPOSE) -f docker-compose.yaml -f docker-compose.bigdata.yaml
 
 bigdata-up: env deploy build ## big-data layout: S3 (SeaweedFS) + Postgres Iceberg catalog + Trino on :8081
-	mkdir -p .local/airflow/logs .local/airflow/auth .local/lake .local/object-store
+	mkdir -p .local/airflow/logs .local/airflow/auth .local/lake .local/object-store .local/cloudbeaver
 	$(BIGDATA) up -d --wait
+	@echo "SQL in the browser: make sql-ui  (http://localhost:8978)"
+
+sql-ui: ## open the SQL web UI (CloudBeaver, big-data layout): browse and query the Iceberg tables
+	open http://localhost:8978
 
 bigdata-down: ## stop the big-data layout
 	$(BIGDATA) down
+
+start: ## start one service of the big-data layout (and what it depends on): SVC=trino
+	$(if $(SVC),,$(error give SVC=<service>, e.g. SVC=trino; list them with make services))
+	$(BIGDATA) up -d --wait $(SVC)
+
+stop: ## stop one service of the big-data layout, keeping its data: SVC=sql-ui
+	$(if $(SVC),,$(error give SVC=<service>, e.g. SVC=sql-ui; list them with make services))
+	$(BIGDATA) stop $(SVC)
+
+services: ## list the big-data layout's services and their state
+	@$(BIGDATA) config --services
+	@$(BIGDATA) ps
 
 # $(value SQL) passes the text unexpanded, so metadata tables like "daily_quotes$snapshots" survive make
 trino-sql: export TRINO_SQL = $(value SQL)
