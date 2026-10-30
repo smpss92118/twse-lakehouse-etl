@@ -1,0 +1,27 @@
+# Runtime state (lake, Airflow logs, caches) lives here and never leaves the machine.
+.local/
+deploy/airflow_dags_mount/
+deploy/releases/
+
+# Secrets
+.env
+*.pem
+*.key
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+
+# Interview brief stays local (not ours to publish)
+/*.pdf
