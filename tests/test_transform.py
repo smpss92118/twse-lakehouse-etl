@@ -64,6 +64,26 @@ def test_typhoon_day_payload_is_not_published():
     assert not transform.is_complete("MI_INDEX", doc, date(2026, 10, 23))
 
 
+def _partial(doc: dict, rows: int) -> dict:
+    transform.find_quote_table(doc)["data"] = transform.find_quote_table(doc)["data"][:rows]
+    return doc
+
+
+@pytest.mark.parametrize(
+    ("payload", "complete"),
+    [
+        (lambda doc: doc, True),
+        (lambda doc: {"stat": "很抱歉，沒有符合條件的資料!"}, False),  # not published yet / closed
+        (lambda doc: {**doc, "date": "20261028"}, False),  # TWSE still serving the previous day
+        (lambda doc: _partial(doc, 500), False),  # upload in progress
+    ],
+    ids=["published", "empty", "previous_day", "partial"],
+)
+def test_wait_gate_accepts_only_a_complete_same_day_payload(payload, complete):
+    """The sensor waits on this, so an empty, stale or half-uploaded table is never written."""
+    assert transform.is_complete("MI_INDEX", payload(load_fixture("MI_INDEX", D)), D) is complete
+
+
 def test_corporate_action_adj_factor():
     actions = transform.parse_corporate_actions(load_fixture("TWT49U", date(2026, 3, 17)))
     tsmc = actions.filter(pl.col("stock_id") == "2330").row(0, named=True)

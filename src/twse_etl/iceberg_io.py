@@ -1,12 +1,13 @@
 """Iceberg catalog access and the single write path: replace one trade_date partition.
 
 PyIceberg commits an overwrite as two snapshots (delete, then append) inside one atomic metadata
-commit, so readers of the current table never see a half-replaced day. The append snapshot carries
-run_id / trade_date / source_sha256, which is what versioning queries key on.
+commit, so readers of the current table never see a half-replaced day. Both snapshots carry
+run_id / trade_date / content_sha256, which is what versioning queries key on.
 """
 
 from __future__ import annotations
 
+import hashlib
 from contextlib import suppress
 from dataclasses import asdict, dataclass
 from datetime import date
@@ -18,7 +19,7 @@ from pyiceberg.catalog import Catalog, load_catalog
 from pyiceberg.exceptions import TableAlreadyExistsError
 from pyiceberg.expressions import And, BooleanExpression, EqualTo, GreaterThanOrEqual, LessThanOrEqual
 from pyiceberg.table import Table
-from pyiceberg.table.snapshots import Operation, Snapshot, ancestors_of
+from pyiceberg.table.snapshots import Snapshot, ancestors_of
 
 from twse_etl import contracts as c
 from twse_etl.config import Settings
@@ -78,15 +79,26 @@ def date_filter(start: date, end: date | None = None) -> BooleanExpression:
 
 
 def current_version(tbl: Table, trade_date: date) -> Snapshot | None:
-    """Latest append snapshot, in the current lineage, written by a run for this trade_date."""
+    """Latest snapshot, in the current lineage, written by a run for this trade_date: the append half
+    of an overwrite, or the delete when the day was published empty."""
     head = tbl.current_snapshot()
     if head is None:
         return None
     for snap in ancestors_of(head, tbl.metadata):
-        summary = snap.summary
-        if summary and summary.operation == Operation.APPEND and summary.get("trade_date") == trade_date.isoformat():
+        if snap.summary and snap.summary.get("trade_date") == trade_date.isoformat():
             return snap
     return None
+
+
+# Per-run bookkeeping: differs on every run even when the data is identical.
+VOLATILE_COLUMNS = ("run_id", "ingested_at", "built_at", "source_sha256")
+
+
+def content_fingerprint(data: pa.Table) -> str:
+    """sha256 of what a reader would see, ignoring row order and bookkeeping columns."""
+    df = pl.from_arrow(data.drop_columns([col for col in VOLATILE_COLUMNS if col in data.column_names]))
+    df = df.sort(df.columns, nulls_last=True)
+    return hashlib.sha256(df.write_csv().encode()).hexdigest()
 
 
 def publish(
@@ -96,15 +108,17 @@ def publish(
     props: dict[str, str],
     window_start: date | None = None,
 ) -> PublishResult:
-    """Idempotent replace of [window_start, trade_date]. Re-publishing identical source bytes is a
-    no-op (no new snapshot); different bytes (a TWSE correction) produce a new snapshot."""
+    """Idempotent replace of [window_start, trade_date], keyed on the content, not the source bytes:
+    re-publishing identical content is a no-op (no new snapshot). Anything that changes the content
+    gets a new snapshot, whether TWSE corrected the data or we fixed the parser after a bad load."""
     name = tbl.name()[-1]
+    fingerprint = content_fingerprint(data)
     prior = current_version(tbl, trade_date)
-    if prior is not None and prior.summary.get("source_sha256") == props["source_sha256"]:
+    if prior is not None and prior.summary.get("content_sha256") == fingerprint:
         return PublishResult(name, prior.snapshot_id, data.num_rows, skipped=True)
 
     row_filter = date_filter(window_start or trade_date, trade_date)
-    snapshot_props = {**props, "trade_date": trade_date.isoformat()}
+    snapshot_props = {**props, "trade_date": trade_date.isoformat(), "content_sha256": fingerprint}
     if data.num_rows == 0:
         tbl.delete(row_filter, snapshot_properties=snapshot_props)
     else:

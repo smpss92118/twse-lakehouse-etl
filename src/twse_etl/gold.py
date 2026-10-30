@@ -8,8 +8,6 @@ import polars as pl
 
 from twse_etl import contracts as c
 
-GOLD_VERSION = "1"  # bump when the build logic changes, so unchanged inputs still rebuild
-
 QUOTE_COLUMNS = [
     "trade_date",
     "stock_id",

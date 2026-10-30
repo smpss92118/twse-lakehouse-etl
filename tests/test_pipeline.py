@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import shutil
 from datetime import date, timedelta
 
+import polars as pl
 import pytest
-from conftest import FAKE_LLM, TYPHOON_VERDICT, load_fixture, make_settings
+from conftest import FAKE_LLM, FIXTURES, TYPHOON_VERDICT, load_fixture, make_settings
 
-from twse_etl import iceberg_io, pipeline, storage
+from twse_etl import iceberg_io, pipeline, storage, transform
 from twse_etl.validate import DataQualityError
 
 DAYS = [date(2026, 10, 22) + timedelta(days=i) for i in range(8)]  # 10-22 .. 10-29
@@ -103,6 +105,47 @@ def test_missing_data_without_evidenced_closure_is_an_anomaly(settings, fake_llm
     fake_llm(verdict, exit_code)
     with pytest.raises(pipeline.MissingDataError):
         pipeline.run_day(date(2026, 10, 23), settings)
+
+
+def test_late_report_on_an_open_market_is_never_turned_into_a_closure(tmp_path, monkeypatch):
+    """Quotes are out, T86 is not: the LLM must not be asked, whatever it would say."""
+    fixtures = tmp_path / "fixtures"
+    for report, key in (("HOLIDAY", "2026"), ("MI_INDEX", "20261029")):
+        (fixtures / report).mkdir(parents=True)
+        shutil.copy(FIXTURES / report / f"{key}.json.gz", fixtures / report)
+    settings = make_settings(tmp_path / "lake").with_overrides(fixture_dir=fixtures)
+    monkeypatch.setenv("HOLIDAY_LLM_CMD", FAKE_LLM)
+    monkeypatch.setenv("FAKE_LLM_VERDICT", json.dumps(TYPHOON_VERDICT, ensure_ascii=False))
+
+    with pytest.raises(pipeline.MissingDataError, match="market was open"):
+        pipeline.run_day(date(2026, 10, 29), settings)
+    assert not pipeline.is_closure_recorded(date(2026, 10, 29), settings)
+
+
+def test_skipped_day_is_reported_as_missing_not_as_bad_prices(settings):
+    pipeline.run_day(date(2026, 10, 22), settings)
+    with pytest.raises(DataQualityError) as exc:
+        pipeline.run_day(date(2026, 10, 28), settings)  # 10-27 was never loaded
+    assert [f.name for f in exc.value.failures] == ["previous_trading_day_loaded"]
+    assert "load 2026-10-27 first" in str(exc.value)
+
+
+def test_parser_fix_rewrites_the_day_although_twse_bytes_are_unchanged(settings, monkeypatch):
+    d = date(2026, 10, 29)
+    pipeline.run_day(d, settings)
+    buggy = transform.parse_quotes
+
+    def fixed(doc, trade_date):  # stands in for a bug fix that changes one parsed value
+        df = buggy(doc, trade_date)
+        return df.with_columns(
+            pl.when(pl.col("stock_id") == "2330").then(pl.col("volume_shares") + 1).otherwise(pl.col("volume_shares"))
+        )
+
+    monkeypatch.setattr(transform, "parse_quotes", fixed)
+    published = pipeline.run_day(d, settings)["published"]
+    assert not published["daily_quotes"]["skipped"]  # same source sha256, different content
+    assert published["institutional_flows"]["skipped"]
+    assert not published["daily_market_wide"]["skipped"]  # Gold follows the new quotes snapshot
 
 
 def test_audit_failure_leaves_iceberg_untouched(settings):

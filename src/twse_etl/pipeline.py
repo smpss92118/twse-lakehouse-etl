@@ -10,7 +10,6 @@ run_day(). Nothing here imports Airflow.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import logging
 import re
@@ -83,8 +82,25 @@ def reports_ready(d: date, settings: Settings) -> dict[str, int]:
     return counts
 
 
+def published_rows(d: date, settings: Settings) -> dict[str, int]:
+    """Rows TWSE has published for d, complete or not. Any row at all proves the market was open."""
+    counts = {}
+    for report in WAIT_REPORTS:
+        doc = sources.fetch(report, d, settings).json()
+        same_day = doc.get("date") in (None, d.strftime("%Y%m%d"))
+        counts[report] = transform.row_count(report, doc) if same_day else 0
+    return counts
+
+
 def resolve_missing_data(d: date, settings: Settings) -> str:
-    """Called after the data-wait cutoff. Returns the closure reason, or raises MissingDataError."""
+    """Called after the data-wait cutoff. Returns the closure reason, or raises MissingDataError.
+
+    The LLM is only asked when TWSE published nothing for d. If one report is out and the other
+    is late or partial, the market was open, so no verdict could turn the day into a closure."""
+    published = published_rows(d, settings)
+    if any(published.values()):
+        alert("data_incomplete_after_cutoff", trade_date=d, row_counts=published)
+        raise MissingDataError(f"{d}: market was open (rows published: {published}) but data is incomplete")
     try:
         verdict = holiday_fallback.ask_llm(d)
     except holiday_fallback.HolidayCheckError as exc:
@@ -92,14 +108,36 @@ def resolve_missing_data(d: date, settings: Settings) -> str:
         raise MissingDataError(f"{d}: no TWSE data and closure check failed: {exc}") from exc
 
     if verdict.is_holiday and verdict.evidence_url:
-        record = {**verdict.to_dict(), "trade_date": d.isoformat(), "status": "pending_human_confirmation"}
-        uri = storage.join(settings.data_uri, "closures", f"{d}.json")
-        storage.write_bytes(uri, json.dumps(record, ensure_ascii=False, indent=1).encode())
+        record_closure(d, settings, {**verdict.to_dict(), "status": "pending_human_confirmation"})
         alert("unscheduled_closure_detected", trade_date=d, reason=verdict.reason, evidence=verdict.evidence_url)
         return verdict.reason
 
     alert("data_missing_on_trading_day", trade_date=d, llm_verdict=verdict.to_dict())
     raise MissingDataError(f"{d}: trading day per calendar, no TWSE data, no evidenced closure")
+
+
+def _closure_uri(d: date, settings: Settings) -> str:
+    return storage.join(settings.data_uri, "closures", f"{d}.json")
+
+
+def record_closure(d: date, settings: Settings, record: dict) -> str:
+    """Unscheduled closures (typhoon days) live here, since the official calendar never lists them."""
+    uri = _closure_uri(d, settings)
+    storage.write_bytes(uri, json.dumps({**record, "trade_date": d.isoformat()}, ensure_ascii=False, indent=1).encode())
+    return uri
+
+
+def is_closure_recorded(d: date, settings: Settings) -> bool:
+    return bool(storage.list_files(storage.join(settings.data_uri, "closures"), f"{d}.json"))
+
+
+def expected_previous_trading_day(d: date, settings: Settings) -> date | None:
+    """The trading day before d per the official calendar and the recorded unscheduled closures."""
+    for back in range(1, 15):
+        day = d - timedelta(days=back)
+        if trading_day_status(day, settings).is_trading_day and not is_closure_recorded(day, settings):
+            return day
+    return None
 
 
 # ---- extract / stage / audit / publish ------------------------------------------------------
@@ -172,12 +210,29 @@ def _prev_close(d: date, settings: Settings) -> pl.DataFrame | None:
     return quotes.select("stock_id", "close")
 
 
+def previous_day_check(d: date, settings: Settings) -> Check:
+    """Days must load in calendar order. Without this, a skipped day surfaces as a misleading
+    'price continuity' failure on every stock the next day."""
+    loaded = previous_trading_day(d, settings)
+    expected = expected_previous_trading_day(d, settings) if loaded else None
+    passed = loaded is None or expected is None or loaded >= expected
+    detail = (
+        ""
+        if passed
+        else f"Silver's latest day before {d} is {loaded}, the calendar expects {expected}: load {expected} first, "
+        f"or if the market was closed that day record it: python -m twse_etl.pipeline record-closure --date {expected}"
+    )
+    return Check("previous_trading_day_loaded", passed, detail)
+
+
 def audit(d: date, staged: dict[str, dict], settings: Settings) -> dict:
     """All checks run before any table is touched; one blocking failure stops the whole day."""
     frames = _load_staged(staged)
     quotes, institutional, actions = frames["MI_INDEX"], frames["T86"], frames["TWT49U"]
-    prev_close = _prev_close(d, settings)
+    gap = previous_day_check(d, settings)
+    prev_close = _prev_close(d, settings) if gap.passed else None  # comparing to the wrong day proves nothing
     checks: list[Check] = [
+        gap,
         *audit_quotes(quotes, d),
         *audit_price_continuity(quotes, prev_close, actions),
         *audit_institutional(institutional, d),
@@ -224,12 +279,11 @@ def build_gold(d: date, settings: Settings, run_id: str) -> dict:
         run_id=run_id,
         built_at=datetime.now(UTC),
     )
-    lineage = f"gold-v{gold.GOLD_VERSION}:{q_snap.snapshot_id}:{i_snap.snapshot_id}:{ca_snap and ca_snap.snapshot_id}"
     props = {
         "run_id": run_id,
-        "source_sha256": hashlib.sha256(lineage.encode()).hexdigest(),
         "quotes_snapshot_id": str(q_snap.snapshot_id),
         "institutional_snapshot_id": str(i_snap.snapshot_id),
+        "corporate_actions_snapshot_id": str(ca_snap.snapshot_id if ca_snap else ""),
     }
     data = wide.to_arrow().cast(contracts.GOLD_SCHEMA)
     result = iceberg_io.publish(tables[GOLD_TABLE], data, d, props)
@@ -311,9 +365,17 @@ def main() -> None:
     back.add_argument("--end", type=date.fromisoformat, required=True)
     for p in (run, back):
         p.add_argument("--source", choices=["twse", "fixture"])
+    closure = sub.add_parser("record-closure", help="confirm an unscheduled closure (e.g. a typhoon day)")
+    closure.add_argument("--date", type=date.fromisoformat, required=True)
+    closure.add_argument("--reason", required=True)
+    closure.add_argument("--evidence-url")
     args = parser.parse_args()
 
     settings = Settings.from_env()
+    if args.cmd == "record-closure":
+        record = {"is_holiday": True, "reason": args.reason, "evidence_url": args.evidence_url}
+        print(record_closure(args.date, settings, {**record, "status": "confirmed_by_human"}))
+        return
     if args.source:
         settings = settings.with_overrides(source=args.source)
     days = (
