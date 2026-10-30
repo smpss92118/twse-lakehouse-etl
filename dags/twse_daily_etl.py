@@ -71,12 +71,23 @@ def _on_failure(context) -> None:
     )
 
 
+def _on_dag_run_failure(context) -> None:
+    """Also fires when the whole run times out, which no task callback would report."""
+    from twse_etl.alerts import alert
+
+    run = context["dag_run"]
+    alert("dag_run_failed", dag_id=run.dag_id, run_id=run.run_id, reason=context.get("reason"))
+
+
 @dag(
     dag_id="twse_daily_etl",
     schedule=CronTriggerTimetable("30 15 * * 1-5", timezone="Asia/Taipei"),
     start_date=pendulum.datetime(2026, 10, 1, tz=TPE),
     catchup=False,
     max_active_runs=1,  # days load in order: price continuity reads the previous day from Silver
+    # With one active run, a hung run would block the next trading day; fail it (and alert) first.
+    dagrun_timeout=timedelta(hours=8),
+    on_failure_callback=_on_dag_run_failure,
     default_args={
         "owner": "data-eng",
         "retries": 2,
