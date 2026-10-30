@@ -36,12 +36,15 @@ def build(
     """LEFT join from quotes: a stock never disappears because T86 has no row for it.
     T86 omits stocks with no institutional trades; those get 0 and institutional_reported=False.
     `actions` covers (previous trading day, trade_date], so an event dated on a closure day
-    is flagged on the first trading day it takes effect."""
+    is flagged on the first trading day it takes effect. adj_factor multiplies every event of the
+    day; adjust.py turns the factors into adjusted prices at query time, so history is never rewritten."""
     flows = institutional.select("trade_date", "stock_id", *c.NET_COLUMNS).with_columns(
         pl.lit(True).alias("institutional_reported")
     )
-    events = (
-        actions.group_by("stock_id").agg(pl.col("adj_factor").product()).with_columns(pl.lit(True).alias("is_ex_event"))
+    events = actions.group_by("stock_id").agg(
+        pl.col("adj_factor").product(),
+        pl.col("action_type").is_in(c.DIVIDEND_ACTIONS).any().alias("is_ex_event"),
+        pl.col("action_type").unique().sort().str.join(",").alias("corporate_action"),
     )
     wide = (
         quotes.select(QUOTE_COLUMNS)

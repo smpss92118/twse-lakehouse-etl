@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 from functools import partial
 
 import polars as pl
 import pytest
-from conftest import load_fixture
+from conftest import load_fixture, staged_actions
 
 from twse_etl import contracts, corporate_actions, transform
-from twse_etl.config import REPO_ROOT
 from twse_etl.validate import audit_cross_table, audit_institutional, audit_price_continuity, audit_quotes
 
 D = date(2026, 10, 29)
@@ -23,15 +22,13 @@ def _failed(checks) -> set[str]:
 
 
 @pytest.fixture(scope="module")
-def real_day() -> dict[str, pl.DataFrame]:
+def real_day(tmp_path_factory) -> dict[str, pl.DataFrame]:
     """2026-10-29 as TWSE published it, with 10-28 as the previous trading day."""
-    actions = transform.parse_corporate_actions(load_fixture("TWT49U", D))
-    vendor = corporate_actions.load_vendor(REPO_ROOT / "fixtures" / "vendor", PREV + timedelta(days=1), D)
     return {
         "quotes": transform.parse_quotes(load_fixture("MI_INDEX", D), D),
         "inst": transform.parse_institutional(load_fixture("T86", D), D),
         "prev_close": transform.parse_quotes(load_fixture("MI_INDEX", PREV), PREV).select("stock_id", "close"),
-        "actions": corporate_actions.attach_vendor(actions, vendor),
+        "actions": staged_actions(tmp_path_factory.mktemp("lake"), D),
     }
 
 
@@ -119,12 +116,12 @@ def test_partial_institutional_upload_is_blocked_before_merge():
     assert "institutional_coverage" in _failed(audit_cross_table(quotes, inst))
 
 
-def test_price_continuity_needs_events_dated_on_the_typhoon_day():
+def test_price_continuity_needs_events_dated_on_the_typhoon_day(tmp_path):
     """10-23 was a typhoon closure. Ex-dividend events dated 10-23 take effect on 10-27, where TWSE
     measures the change from the opening reference price instead of the 10-22 close."""
     prev = transform.parse_quotes(load_fixture("MI_INDEX", date(2026, 10, 22)), date(2026, 10, 22))
     today = transform.parse_quotes(load_fixture("MI_INDEX", date(2026, 10, 27)), date(2026, 10, 27))
-    window = pl.concat([transform.parse_corporate_actions(load_fixture("TWT49U", date(2026, 10, d))) for d in (23, 27)])
+    window = staged_actions(tmp_path, date(2026, 10, 27), start=date(2026, 10, 23))
     prev_close = prev.select("stock_id", "close")
 
     assert _failed(audit_price_continuity(today, prev_close, window)) == set()

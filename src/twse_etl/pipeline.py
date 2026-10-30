@@ -41,12 +41,20 @@ from twse_etl.validate import (
 
 log = logging.getLogger("twse_etl.pipeline")
 
-REPORT_TABLES = {"MI_INDEX": "daily_quotes", "T86": "institutional_flows", "TWT49U": "corporate_actions"}
+# One logical report built from several TWSE tables (sources.RANGE_REPORTS + their detail pages).
+CORPORATE_ACTIONS = "CORPORATE_ACTIONS"
+REPORT_TABLES = {"MI_INDEX": "daily_quotes", "T86": "institutional_flows", CORPORATE_ACTIONS: "corporate_actions"}
 REPORT_SCHEMAS = {
     "MI_INDEX": contracts.QUOTES_SCHEMA,
     "T86": contracts.INSTITUTIONAL_SCHEMA,
-    "TWT49U": contracts.CORPORATE_ACTIONS_SCHEMA,
+    CORPORATE_ACTIONS: contracts.CORPORATE_ACTIONS_SCHEMA,
 }
+CA_PARSERS = {
+    "TWT49U": transform.parse_corporate_actions,
+    "TWTAUU": transform.parse_capital_reductions,
+    "TWTCAU": transform.parse_etf_splits,
+}
+DETAIL_FIELDS = {"TWT49UDetail": contracts.DIVIDEND_DETAIL_FIELDS, "TWTAVUDetail": contracts.REDUCTION_DETAIL_FIELDS}
 GOLD_TABLE = "daily_market_wide"
 WAIT_REPORTS = ("MI_INDEX", "T86")
 
@@ -153,13 +161,30 @@ def ca_window_start(d: date, settings: Settings) -> date:
     return prev + timedelta(days=1) if prev else d
 
 
+def extract_corporate_actions(d: date, settings: Settings, start: date | None = None) -> bytes:
+    """Every corporate-action table over (previous loaded trading day, d] and each event's term page,
+    each landed raw in Bronze. Returns the bundle: the exact Bronze files this run read."""
+    start = start or ca_window_start(d, settings)
+    bronze: dict[str, str | dict[str, str]] = {}
+    for report in sources.RANGE_REPORTS:
+        payload = sources.fetch(report, d, settings, start=start)
+        bronze[report] = sources.land_bronze(payload, settings)
+        detail = sources.DETAIL_REPORTS.get(report)
+        for key in sources.detail_keys(payload.json()) if detail else []:
+            page = sources.fetch(detail, d, settings, key=key)
+            bronze.setdefault(detail, {})[key] = sources.land_bronze(page, settings)
+    return json.dumps({"window": [start.isoformat(), d.isoformat()], "bronze": bronze}, indent=1).encode()
+
+
 def extract(report: str, d: date, settings: Settings, body: bytes | None = None) -> str:
-    """Fetch one report into Bronze. `body` injects a payload (used to simulate a TWSE correction)."""
+    """Fetch one report into Bronze. `body` injects a payload (used to simulate a TWSE correction;
+    for corporate actions, an earlier bundle whose Bronze files are reused)."""
     if body is not None:
         payload = sources.RawPayload(report, d, body, "injected://correction", datetime.now(UTC))
+    elif report == CORPORATE_ACTIONS:
+        payload = sources.RawPayload(report, d, extract_corporate_actions(d, settings), "bundle://", datetime.now(UTC))
     else:
-        start = ca_window_start(d, settings) if report == "TWT49U" else None
-        payload = sources.fetch(report, d, settings, start=start)
+        payload = sources.fetch(report, d, settings)
     if report in WAIT_REPORTS and not transform.is_complete(report, payload.json(), d):
         raise IncompleteDataError(f"{report} {d}: {transform.row_count(report, payload.json())} rows")
     uri = sources.land_bronze(payload, settings)
@@ -178,9 +203,7 @@ def stage(report: str, d: date, bronze_uri: str, settings: Settings, run_id: str
         df = transform.parse_institutional(doc, d)
         extra = transform.unexpected_fields(doc["fields"], contracts.INSTITUTIONAL_FIELDS)
     else:
-        start = ca_window_start(d, settings)
-        vendor = corporate_actions.load_vendor(settings.vendor_dir, start, d)
-        df = corporate_actions.attach_vendor(transform.parse_corporate_actions(doc), vendor)
+        df = stage_corporate_actions(doc, d, settings)
         extra = []
     if extra:
         alert("schema_drift_new_columns", report=report, trade_date=d, columns=extra)
@@ -196,6 +219,22 @@ def stage(report: str, d: date, bronze_uri: str, settings: Settings, run_id: str
     storage.write_parquet(uri, table)
     log.info("staged %s %s rows=%d -> %s", report, d, table.num_rows, uri)
     return {"uri": uri, "sha256": payload.sha256, "rows": table.num_rows}
+
+
+def stage_corporate_actions(bundle: dict, d: date, settings: Settings) -> pl.DataFrame:
+    """Events from all three tables, with the official formula recomputed from each event's terms
+    and the ex-dividend reference price compared with the third-party vendor."""
+    bronze = bundle["bronze"]
+    events = pl.concat([parse(sources.load_bronze(bronze[r]).json()) for r, parse in CA_PARSERS.items()])
+    terms = {}
+    for report, detail in sources.DETAIL_REPORTS.items():
+        for key, uri in bronze.get(detail, {}).items():
+            parsed = transform.parse_event_terms(sources.load_bronze(uri).json(), DETAIL_FIELDS[detail])
+            if parsed is not None:
+                terms[(report, key)] = parsed
+    events = corporate_actions.attach_formula(events, corporate_actions.terms_frame(terms))
+    vendor = corporate_actions.load_vendor(settings.vendor_dir, date.fromisoformat(bundle["window"][0]), d)
+    return corporate_actions.attach_vendor(events, vendor)
 
 
 def _load_staged(staged: dict[str, dict]) -> dict[str, pl.DataFrame]:
@@ -228,7 +267,7 @@ def previous_day_check(d: date, settings: Settings) -> Check:
 def audit(d: date, staged: dict[str, dict], settings: Settings) -> dict:
     """All checks run before any table is touched; one blocking failure stops the whole day."""
     frames = _load_staged(staged)
-    quotes, institutional, actions = frames["MI_INDEX"], frames["T86"], frames["TWT49U"]
+    quotes, institutional, actions = frames["MI_INDEX"], frames["T86"], frames[CORPORATE_ACTIONS]
     gap = previous_day_check(d, settings)
     prev_close = _prev_close(d, settings) if gap.passed else None  # comparing to the wrong day proves nothing
     checks: list[Check] = [
@@ -253,7 +292,7 @@ def publish(d: date, staged: dict[str, dict], settings: Settings, run_id: str) -
     for report, name in REPORT_TABLES.items():
         tbl = iceberg_io.get_table(settings, name, catalog)
         props = {"run_id": run_id, "source_sha256": staged[report]["sha256"]}
-        start = window_start if report == "TWT49U" else d
+        start = window_start if report == CORPORATE_ACTIONS else d
         result = iceberg_io.publish(tbl, storage.read_parquet(staged[report]["uri"]), d, props, start)
         log.info("publish %s %s -> %s", name, d, result)
         results[name] = result.to_dict()

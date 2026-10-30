@@ -23,7 +23,7 @@ import polars as pl
 from pyiceberg.table.snapshots import Operation, ancestors_of
 from pyiceberg.types import StringType
 
-from twse_etl import iceberg_io, pipeline, storage
+from twse_etl import adjust, iceberg_io, pipeline, storage
 from twse_etl.config import Settings
 
 TPE = ZoneInfo("Asia/Taipei")
@@ -121,7 +121,7 @@ def _latest_bronze(settings: Settings, report: str, d: date) -> bytes:
 
 def cmd_correct(args, settings: Settings) -> None:
     """Re-ingest a day where TWSE 'corrected' one stock's traded volume. Same code path as a
-    scheduled run; the other two reports are byte-identical, so they produce no new snapshot."""
+    scheduled run; the other reports parse to identical content, so they produce no new snapshot."""
     d, stock = args.date, args.stock
     quotes_tbl = iceberg_io.get_table(settings, "daily_quotes")
     before = iceberg_io.current_version(quotes_tbl, d)
@@ -137,11 +137,11 @@ def cmd_correct(args, settings: Settings) -> None:
     bodies = {
         "MI_INDEX": json.dumps(doc, ensure_ascii=False).encode(),
         "T86": _latest_bronze(settings, "T86", d),
-        "TWT49U": _latest_bronze(settings, "TWT49U", d),
+        pipeline.CORPORATE_ACTIONS: _latest_bronze(settings, pipeline.CORPORATE_ACTIONS, d),
     }
     result = pipeline.run_day(d, settings, run_id=f"correction__{datetime.now(TPE):%Y%m%dT%H%M%S}", bodies=bodies)
     for name, res in result["published"].items():
-        outcome = "skipped (identical source)" if res["skipped"] else f"new snapshot {res['snapshot_id']}"
+        outcome = "skipped (identical content)" if res["skipped"] else f"new snapshot {res['snapshot_id']}"
         print(f"  {name:20s} {outcome}")
 
     quotes_tbl.refresh()
@@ -187,6 +187,17 @@ def cmd_rollback(args, settings: Settings) -> None:
     print("data files are untouched; rolled-back snapshots stay in history until expire_snapshots")
 
 
+def cmd_adjusted(args, settings: Settings) -> None:
+    """Adjusted prices from printed prices x the stored per-day factors; nothing stored is rewritten."""
+    tbl = iceberg_io.get_table(settings, pipeline.GOLD_TABLE)
+    wide = iceberg_io.read(tbl, args.start, args.end, snapshot_id=args.snapshot_id)
+    out = adjust.adjust(wide.filter(pl.col("stock_id") == args.stock), args.method)
+    version = f"snapshot {args.snapshot_id}" if args.snapshot_id else "current version"
+    print(f"{args.stock} {args.start}..{args.end}, {args.method}-adjusted, {version}")
+    cols = ["trade_date", "close", "change_sign", "price_change", "corporate_action", "adj_factor", "close_adj"]
+    print(out.select(c for c in cols if c in out.columns))
+
+
 def cmd_add_column(args, settings: Settings) -> None:
     tbl = iceberg_io.get_table(settings, args.table)
     old_snapshot = tbl.current_snapshot().snapshot_id
@@ -230,6 +241,13 @@ def main() -> None:
     p.add_argument("--table", choices=tables, help="default: every table the last run wrote, Gold included")
     p.add_argument("--snapshot-id", type=int)
 
+    p = sub.add_parser("adjusted")
+    p.add_argument("--stock", required=True)
+    p.add_argument("--start", type=date.fromisoformat, required=True)
+    p.add_argument("--end", type=date.fromisoformat, required=True)
+    p.add_argument("--method", choices=["backward", "forward"], default="backward")
+    p.add_argument("--snapshot-id", type=int, help="read Gold as of this snapshot (point-in-time)")
+
     p = sub.add_parser("add-column")
     p.add_argument("--table", choices=tables, default="daily_quotes")
     p.add_argument("--name", default="data_quality_note")
@@ -240,6 +258,7 @@ def main() -> None:
         "as-of": cmd_as_of,
         "correct": cmd_correct,
         "rollback": cmd_rollback,
+        "adjusted": cmd_adjusted,
         "add-column": cmd_add_column,
     }
     handlers[args.cmd](args, Settings.from_env())

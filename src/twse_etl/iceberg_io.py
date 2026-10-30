@@ -68,7 +68,13 @@ def get_table(settings: Settings, name: str, catalog: Catalog | None = None) -> 
             with catalog.create_table_transaction(ident, schema=SCHEMAS[name]) as txn:
                 with txn.update_spec() as spec:
                     spec.add_identity("trade_date")
-    return catalog.load_table(ident)
+    tbl = catalog.load_table(ident)
+    if set(SCHEMAS[name].names) - set(tbl.schema().column_names):
+        # Schema evolution: columns added to the contract are appended as optional columns.
+        # Old data files are not rewritten; their rows read the new columns as null.
+        with tbl.update_schema() as update:
+            update.union_by_name(SCHEMAS[name])
+    return tbl
 
 
 def date_filter(start: date, end: date | None = None) -> BooleanExpression:

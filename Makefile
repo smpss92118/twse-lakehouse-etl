@@ -10,9 +10,13 @@ DEMO := $(AIRFLOW) python /opt/airflow/scripts/demo_versioning.py
 DATE ?= 2026-10-29
 TABLE ?= daily_quotes
 VOLUME ?= 12345678
+STOCK ?= 2028
+START ?= 2026-10-22
+END ?= $(DATE)
+METHOD ?= backward
 
 .PHONY: help setup env lint test dag-test fixtures deploy deploy-from-ci build up down logs trigger status \
-	demo-snapshots demo-asof demo-correct demo-rollback demo-evolve dev-backfill clean \
+	demo-snapshots demo-asof demo-correct demo-rollback demo-evolve demo-adjusted dev-backfill clean \
 	bigdata-up bigdata-down trino-sql
 
 help: ## list targets
@@ -88,6 +92,10 @@ demo-rollback: ## [optional] undo the last run in every table it wrote (or only 
 
 demo-evolve: ## [optional] add a column; old rows and snapshots stay queryable
 	$(DEMO) add-column --table $(TABLE)
+
+demo-adjusted: ## adjusted prices at query time: STOCK=2028 START=2026-10-22 END=2026-10-29 [METHOD=forward]
+	$(DEMO) adjusted --stock $(STOCK) --start $(START) --end $(END) --method $(METHOD) \
+		$(if $(SNAPSHOT),--snapshot-id $(SNAPSHOT))
 
 dev-backfill: ## run the pipeline without Airflow on fixtures into .local/dev
 	TWSE_SOURCE=fixture uv run python -m twse_etl.pipeline backfill --start 2026-10-22 --end 2026-10-29

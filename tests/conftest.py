@@ -6,9 +6,10 @@ import sys
 from datetime import date
 from pathlib import Path
 
+import polars as pl
 import pytest
 
-from twse_etl import sources
+from twse_etl import pipeline, sources
 from twse_etl.config import REPO_ROOT, Settings
 
 FIXTURES = REPO_ROOT / "fixtures" / "twse"
@@ -20,8 +21,8 @@ TYPHOON_VERDICT = {
 }
 
 
-def load_fixture(report: str, d: date) -> dict:
-    return json.loads(gzip.decompress(sources.fixture_path(FIXTURES, report, d).read_bytes()))
+def load_fixture(report: str, d: date, key: str | None = None) -> dict:
+    return json.loads(gzip.decompress(sources.fixture_path(FIXTURES, report, d, key).read_bytes()))
 
 
 def make_settings(home: Path) -> Settings:
@@ -34,6 +35,13 @@ def make_settings(home: Path) -> Settings:
         fixture_dir=FIXTURES,
         vendor_dir=REPO_ROOT / "fixtures" / "vendor",
     )
+
+
+def staged_actions(home: Path, end: date, start: date | None = None) -> pl.DataFrame:
+    """Corporate actions over [start, end] exactly as the pipeline stages them, from fixtures."""
+    settings = make_settings(home)
+    bundle = json.loads(pipeline.extract_corporate_actions(end, settings, start=start))
+    return pipeline.stage_corporate_actions(bundle, end, settings)
 
 
 @pytest.fixture

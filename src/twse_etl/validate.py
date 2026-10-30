@@ -76,14 +76,16 @@ def audit_quotes(df: pl.DataFrame, trade_date: date) -> list[Check]:
 
 
 def audit_price_continuity(df: pl.DataFrame, prev_close: pl.DataFrame | None, actions: pl.DataFrame) -> list[Check]:
-    """close - signed change must equal the previous close, or the TWT49U opening reference price
-    when an ex-rights event fell between the two trading days (e.g. dated on a typhoon closure).
+    """close - signed change must equal the previous close, or the opening reference price when a
+    corporate action took effect in between: an ex-rights event dated on a typhoon closure, or a
+    split / capital reduction resuming after a halt (no previous close at all, only the reference).
     "X" rows are excluded: TWSE marks those moves as not comparable."""
     if prev_close is None or prev_close.height == 0:
         return [Check("quotes_price_continuity", True, "skipped: no previous trading day in Silver")]
+    latest_ref = actions.sort("trade_date").group_by("stock_id").agg(pl.col("open_ref_price").last())
     base = (
         prev_close.select("stock_id", pl.col("close").alias("prev_close"))
-        .join(actions.select("stock_id", "open_ref_price"), on="stock_id", how="left")
+        .join(latest_ref, on="stock_id", how="full", coalesce=True)
         .select("stock_id", pl.coalesce("open_ref_price", "prev_close").alias("base"))
     )
     joined = df.filter((pl.col("change_sign") != "X") & pl.col("close").is_not_null()).join(

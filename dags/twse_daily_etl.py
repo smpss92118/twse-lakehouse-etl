@@ -33,7 +33,7 @@ from airflow.timetables.trigger import CronTriggerTimetable
 TPE = pendulum.timezone("Asia/Taipei")
 DELAY_ALERT_HOUR = 17  # both reports are normally out by ~16:30
 CUTOFF_HOUR = 19
-REPORTS = {"MI_INDEX": "quotes", "T86": "institutional", "TWT49U": "corporate_actions"}
+REPORTS = {"MI_INDEX": "quotes", "T86": "institutional", "CORPORATE_ACTIONS": "corporate_actions"}
 
 log = logging.getLogger(__name__)
 
@@ -158,7 +158,7 @@ def twse_daily_etl():
     def audit(trade_date: str, quotes: dict, institutional: dict, corporate_actions: dict) -> dict:
         from twse_etl.pipeline import audit as audit_day
 
-        staged = {"MI_INDEX": quotes, "T86": institutional, "TWT49U": corporate_actions}
+        staged = {"MI_INDEX": quotes, "T86": institutional, "CORPORATE_ACTIONS": corporate_actions}
         return _run(audit_day, date.fromisoformat(trade_date), staged, _settings())
 
     @task
@@ -166,7 +166,7 @@ def twse_daily_etl():
         """One task writes all Silver tables: the SQLite catalog allows a single writer at a time."""
         from twse_etl.pipeline import publish
 
-        staged = {"MI_INDEX": quotes, "T86": institutional, "TWT49U": corporate_actions}
+        staged = {"MI_INDEX": quotes, "T86": institutional, "CORPORATE_ACTIONS": corporate_actions}
         return publish(date.fromisoformat(trade_date), staged, _settings(), get_current_context()["run_id"])
 
     @task
@@ -181,7 +181,7 @@ def twse_daily_etl():
     ) -> dict:
         from twse_etl.pipeline import reconcile as check
 
-        staged = {"MI_INDEX": quotes, "T86": institutional, "TWT49U": corporate_actions}
+        staged = {"MI_INDEX": quotes, "T86": institutional, "CORPORATE_ACTIONS": corporate_actions}
         run_id = get_current_context()["run_id"]
         manifest = _run(check, date.fromisoformat(trade_date), _settings(), run_id, staged, audit_report)
         return {"snapshots": manifest["snapshots"], "row_counts": manifest["row_counts"]}

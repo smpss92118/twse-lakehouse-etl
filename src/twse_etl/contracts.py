@@ -56,7 +56,9 @@ INSTITUTIONAL_FIELDS = {
     "三大法人買賣超股數": "total_net",
 }
 
-# TWT49U (ex-rights / ex-dividend results). Only the columns the pipeline uses.
+# Corporate actions: three TWSE tables, one row per event, all mapped onto CORPORATE_ACTIONS_SCHEMA.
+# trade_date is the day the event takes effect (ex-date, or the resumption day after a halt).
+# TWT49U: ex-rights / ex-dividend results.
 CORPORATE_ACTION_FIELDS = {
     "資料日期": "data_date",
     "股票代號": "stock_id",
@@ -66,9 +68,58 @@ CORPORATE_ACTION_FIELDS = {
     "權值+息值": "dividend_value",
     "權/息": "action_type",
     "開盤競價基準": "open_ref_price",
+    "減除股利參考價": "dividend_ref_price",
+    "詳細資料": "detail_key",
+}
+# TWTAUU: capital reduction, trading resumes at a reference price.
+CAPITAL_REDUCTION_FIELDS = {
+    "恢復買賣日期": "data_date",
+    "股票代號": "stock_id",
+    "名稱": "stock_name",
+    "停止買賣前收盤價格": "before_close",
+    "恢復買賣參考價": "ref_price",
+    "開盤競價基準": "open_ref_price",
+    "減資原因": "note",
+    "詳細資料": "detail_key",
+}
+# TWTCAU: ETF split / reverse split, trading resumes at a reference price.
+ETF_SPLIT_FIELDS = {
+    "恢復買賣日期": "data_date",
+    "ETF代號": "stock_id",
+    "名稱": "stock_name",
+    "分割(反分割)": "action_type",
+    "停止買賣前收盤價格": "before_close",
+    "恢復買賣參考價": "ref_price",
+    "開盤競價基準": "open_ref_price",
+}
+# Per-event terms behind the official reference price (TWT49UDetail / TWTAVUDetail pages).
+DIVIDEND_DETAIL_FIELDS = {
+    "(每股配發現金股利)除息": "cash_dividend",
+    "A. 按普通股股東持股比例每千股無償配股": "bonus_shares_per_1000",
+    "C. (有償) 現金增資": "cash_increase_shares",
+    "c. 原股東認購": "shareholder_subscribed_shares",
+    "每股認購金額": "subscription_price",
+    "按股東持股比例每千股認購": "subscribed_shares_per_1000",
+}
+REDUCTION_DETAIL_FIELDS = {
+    "每壹仟股換發新股票：": "new_shares_per_1000",
+    "每股退還股款：": "refund_per_share",
+    "原股每股配發現金股利：": "cash_dividend",
+    "減資並(有償)現金增資：": "cash_increase_shares",
+    "c. 原股東認購：": "shareholder_subscribed_shares",
+    "每股認購金額：": "subscription_price",
+    "按股東持股比例每千股認購：": "subscribed_shares_per_1000",
 }
 
-ACTION_TYPES = {"息": "cash_dividend", "權": "stock_dividend", "權息": "cash_and_stock_dividend"}
+ACTION_TYPES = {
+    "息": "cash_dividend",
+    "權": "stock_dividend",
+    "權息": "cash_and_stock_dividend",
+    "分割": "split",
+    "反分割": "reverse_split",
+}
+DIVIDEND_ACTIONS = ("cash_dividend", "stock_dividend", "cash_and_stock_dividend")
+CAPITAL_REDUCTION = "capital_reduction"
 
 INSTITUTIONAL_GROUPS = ("foreign", "foreign_dealer", "trust", "dealer_self", "dealer_hedge")
 NET_COLUMNS = ("foreign_net", "foreign_dealer_net", "trust_net", "dealer_net", "total_net")
@@ -112,8 +163,8 @@ INSTITUTIONAL_SCHEMA = pa.schema(
 
 CORPORATE_ACTIONS_SCHEMA = pa.schema(
     [
-        *_KEY,  # trade_date = ex-rights / ex-dividend date
-        pa.field("action_type", pa.string()),
+        *_KEY,  # trade_date = the day the event takes effect (ex-date or resumption day)
+        pa.field("action_type", pa.string()),  # ACTION_TYPES values or capital_reduction
         pa.field("before_close", PRICE),
         pa.field("ref_price", PRICE),
         pa.field("dividend_value", pa.decimal128(16, 6)),
@@ -122,6 +173,14 @@ CORPORATE_ACTIONS_SCHEMA = pa.schema(
         pa.field("vendor_ref_price", PRICE),  # third-party (FinMind) reference price
         pa.field("sources_agreed", pa.bool_()),  # null when the vendor has no record
         *LINEAGE,
+        # Added later; Iceberg appends evolved columns at the end, so new tables match old ones.
+        pa.field("source_report", pa.string()),  # TWT49U / TWTAUU / TWTCAU
+        pa.field("note", pa.string()),  # e.g. the reason of a capital reduction
+        pa.field("calc_ref_price", pa.decimal128(14, 4)),  # official formula recomputed from the terms
+        pa.field("formula_agrees", pa.bool_()),  # truncates to ref_price; null when terms unavailable
+        # TWT49U only: the reference price without a cash capital increase. TWSE opens (and sets the
+        # price limits) from it, so for a rights issue open_ref_price follows it, not ref_price.
+        pa.field("dividend_ref_price", PRICE),
     ]
 )
 
@@ -144,5 +203,7 @@ GOLD_SCHEMA = pa.schema(
         pa.field("institutional_snapshot_id", pa.int64(), nullable=False),
         pa.field("run_id", pa.string(), nullable=False),
         pa.field("built_at", pa.timestamp("us", tz="UTC"), nullable=False),
+        # Added later (appended, see CORPORATE_ACTIONS_SCHEMA): events taking effect that day, e.g. "split".
+        pa.field("corporate_action", pa.string()),
     ]
 )
