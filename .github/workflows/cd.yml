@@ -15,7 +15,15 @@ concurrency:
 jobs:
   deploy-bundle:
     name: Sync dags/ to the Airflow DAGs folder
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    # `branches: [main]` matches by branch name only, so a fork's PR from its own "main" would match too.
+    # Deploy only a successful CI run of a push to main in this repository, i.e. a merge.
+    if: >-
+      github.event_name == 'workflow_dispatch' || (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository
+      )
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
