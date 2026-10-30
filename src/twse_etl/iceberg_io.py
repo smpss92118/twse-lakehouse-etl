@@ -15,7 +15,6 @@ from pathlib import Path
 import polars as pl
 import pyarrow as pa
 from pyiceberg.catalog import Catalog, load_catalog
-from pyiceberg.catalog.sql import SqlCatalog
 from pyiceberg.exceptions import TableAlreadyExistsError
 from pyiceberg.expressions import And, BooleanExpression, EqualTo, GreaterThanOrEqual, LessThanOrEqual
 from pyiceberg.table import Table
@@ -48,12 +47,15 @@ def _as_uri(location: str) -> str:
 
 
 def get_catalog(settings: Settings) -> Catalog:
-    """The only place that knows where the catalog lives. AWS: ICEBERG_CATALOG_TYPE=glue."""
+    """The only place that knows where the catalog lives. AWS: ICEBERG_CATALOG_TYPE=glue.
+
+    load_catalog also merges PYICEBERG_CATALOG__TWSE__* environment variables, so object-store
+    settings (e.g. PYICEBERG_CATALOG__TWSE__S3__ENDPOINT) are configuration, not code."""
     if settings.catalog_type == "glue":
         return load_catalog("twse", type="glue", warehouse=settings.warehouse_uri)
     if settings.catalog_uri.startswith("sqlite:///"):
         Path(settings.catalog_uri.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
-    return SqlCatalog("twse", uri=settings.catalog_uri, warehouse=_as_uri(settings.warehouse_uri))
+    return load_catalog("twse", type="sql", uri=settings.catalog_uri, warehouse=_as_uri(settings.warehouse_uri))
 
 
 def get_table(settings: Settings, name: str, catalog: Catalog | None = None) -> Table:

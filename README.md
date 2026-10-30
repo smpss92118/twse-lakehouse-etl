@@ -4,6 +4,7 @@
 寫入 Iceberg，產出「每日個股行情＋法人買賣超」合併表，並能回答「上週算訊號時用的是哪一版資料」。
 
 Airflow 3.3（docker-compose, LocalExecutor）· PyIceberg 0.12（SQLite catalog）· Polars · GitHub Actions
+· 選配：S3（SeaweedFS）+ Postgres catalog + Trino
 
 ```mermaid
 flowchart LR
@@ -113,6 +114,29 @@ after  snapshot 1729039165247099125: volume_shares=12,345,678
 一次「覆寫某一天」在 PyIceberg 是 **delete + append 兩個 snapshot、同一個 metadata commit**，
 所以讀 current table 的人永遠看不到半套資料；snapshot 清單裡兩筆都帶同一個 run_id。
 
+### 用 SQL 查：big-data 配置（S3 + Postgres catalog + Trino）
+
+預設配置（SQLite catalog + 本機檔案）只能用 Python 讀。要讓策略團隊下 SQL，或資料量變大時：
+
+```bash
+make bigdata-up      # 疊加 docker-compose.bigdata.yaml：SeaweedFS（S3 API）+ Postgres（Iceberg JDBC catalog）+ Trino :8081
+make trigger DATE=2026-10-29
+make trino-sql SQL='SELECT trade_date, count(*) FROM iceberg.twse.daily_market_wide GROUP BY 1'
+make trino-sql SQL='SELECT snapshot_id, operation, summary FROM iceberg.twse."daily_quotes$snapshots"'
+make trino-sql SQL='SELECT count(*) FROM iceberg.twse.daily_quotes FOR VERSION AS OF <snapshot_id>'
+make bigdata-down
+```
+
+- pipeline 程式沒有分支：只有 `ICEBERG_CATALOG_URI`、`ICEBERG_WAREHOUSE=s3://warehouse`、`PYICEBERG_CATALOG__TWSE__S3__*`
+  這些環境變數不同。PyIceberg 寫、Trino 讀同一個 catalog、同一個 bucket；`make demo-*` 也照用。
+- 實測（2026-10-30）：live 跑 10-28、10-29 後，Trino 查 Gold 得 1,386 / 1,388 筆；`$snapshots` 兩個 append；
+  `FOR VERSION AS OF` 10-28 的 snapshot 回 1,386 筆，目前版本 2,774 筆。
+- 這套的資料在 `.local/object-store/`，和預設配置的 `.local/lake/` 是分開的兩個資料湖。
+  Bronze / staging 仍寫本機（`TWSE_DATA_URI`），上雲時同樣改成 `s3://`。
+- 本機 S3 的 key `local-dev` 只在這幾個容器之間有效（object store 不對外開 port），不是真的憑證。
+- UI：DBeaver（免費桌面版，內建 Trino driver）連 `localhost:8081`，使用者名稱隨意、免密碼，可下 SQL、瀏覽、匯出 CSV / Excel。
+  要給團隊用網頁時再加 Superset 或 Metabase 一個服務。量再大時 Trino 加 worker；Spark 也能接同一個 JDBC catalog。
+
 ## 4. 測試
 
 ```bash
@@ -207,7 +231,8 @@ Gold 用 **LEFT JOIN**（從行情出發），T86 沒列的股票法人欄位填
 - 證交所修正資料的時點不固定：本設計是「重抓同一天就產生新版本」；生產環境會加 T+1 早上的自動重抓比對。
 - 第三方資料（FinMind）只拿來交叉驗證除權息，不進主資料流；repo 內只放測試日期的 13 筆。
 - `fixtures/` 是證交所原始回應的逐位元組錄製（`scripts/record_fixtures.py`），CI 不連網；被限流時 `TWSE_SOURCE=fixture`。
-- SQLite catalog 是題目指定、適合單機；多人或多 writer 時換 Postgres（JDBC）或 Glue/REST catalog，程式不改。
+- SQLite catalog 是題目指定、適合單機；多人或多 writer 時換 Postgres（JDBC）或 Glue/REST catalog，程式不改
+  （Postgres + S3 已實測，見第 3 節 big-data 配置）。
 
 ### 對題目我會做得不一樣的地方
 - **先稽核再寫入（Write-Audit-Publish）**，而不是「寫入後筆數檢查」：檢查失敗時 Iceberg 沒有被污染，不用 rollback。
@@ -217,7 +242,15 @@ Gold 用 **LEFT JOIN**（從行情出發），T86 沒列的股票法人欄位填
 
 ## 9. CI/CD 證據
 
-（push 到 GitHub 後補上 run 連結）
+| 流程 | GitHub Actions run | 結果 |
+|---|---|---|
+| 第一次 push main：CI（`unit-tests` + `dag-integrity`） | [CI](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41049725767) | success |
+| CI 通過後自動 CD：打包 `airflow-dags-<sha>` artifact；`deploy-aws` 未啟用所以 skipped | [CD](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41049857773) | success |
+| 變更走 PR：[#1](https://github.com/smpss92118/twse-lakehouse-etl/pull/1) 加 `dagrun_timeout` 與 DAG 層告警 | [CI on PR](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41050021409) | success |
+| merge 到 main 後：CI → CD（`workflow_run` 觸發） | [CI](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41051534893) → [CD](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41051666660) | success |
+
+本機套用 CD 產出的那一包：`make deploy-from-ci`（掛載資料夾裡的 `DEPLOYED_VERSION` 會等於 main 的 commit sha）。
+GitHub 的雲端 runner 連不到本機 Airflow，所以最後一步是一行指令；上 AWS 時由 `deploy-aws` job 自動完成。
 
 ## 10. 目錄
 
@@ -242,4 +275,5 @@ scripts/record_fixtures.py    錄製證交所原始回應
 fixtures/                     錄製的原始回應（gzip）＋ FinMind 小樣本
 tests/                        pytest
 docker/ docker-compose.yaml   Airflow image 與本機環境
+docker-compose.bigdata.yaml   選配：S3（SeaweedFS）+ Postgres catalog + Trino（docker/trino、docker/seaweedfs 設定）
 ```
