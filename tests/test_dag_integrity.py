@@ -41,3 +41,4 @@ def test_task_chain_matches_the_spec():
         assert downstream in dag.get_task(upstream).downstream_task_ids, f"{upstream} -> {downstream}"
     assert "check_unscheduled_closure" in dag.get_task("route").downstream_task_ids
     assert dag.default_args["retries"] > 0
+    assert dag.dagrun_timeout is not None  # one active run: a hung run must not block the next day
