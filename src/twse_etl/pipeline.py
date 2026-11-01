@@ -14,6 +14,7 @@ import json
 import logging
 import re
 from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import polars as pl
 
@@ -47,6 +48,10 @@ CA_PARSERS = {
 GOLD_TABLE = "daily_market_wide"
 WAIT_REPORTS = ("MI_INDEX", "T86")
 
+TPE = ZoneInfo("Asia/Taipei")
+DELAY_ALERT_HOUR = 17  # both reports are normally out by ~16:30
+CUTOFF_HOUR = 19  # stop waiting; only now may "no data" mean "the market was closed"
+
 
 class IncompleteDataError(RuntimeError):
     """TWSE has not (fully) published yet. Retriable."""
@@ -58,6 +63,17 @@ class MissingDataError(RuntimeError):
 
 def _safe(run_id: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]", "_", run_id)
+
+
+def _now() -> datetime:
+    return datetime.now(TPE)
+
+
+def past_cutoff(d: date, now: datetime | None = None) -> bool:
+    """Whether d's data-wait cutoff has passed. Before it, missing data only means 'not published
+    yet': MI_5MINS is empty until the market opens, so asking it earlier would record a closure."""
+    now = now or _now()
+    return now >= datetime(d.year, d.month, d.day, CUTOFF_HOUR, tzinfo=TPE)
 
 
 # ---- gate and wait -------------------------------------------------------------------------
@@ -193,8 +209,7 @@ def stage(report: str, d: date, bronze_uri: str, settings: Settings, run_id: str
         df = transform.parse_institutional(doc, d)
         extra = transform.unexpected_fields(doc["fields"], contracts.INSTITUTIONAL_FIELDS)
     else:
-        df = stage_corporate_actions(doc)
-        extra = []
+        (df, degraded), extra = stage_corporate_actions(doc, d), []
     if extra:
         alert("schema_drift_new_columns", report=report, trade_date=d, columns=extra)
 
@@ -208,13 +223,32 @@ def stage(report: str, d: date, bronze_uri: str, settings: Settings, run_id: str
     uri = storage.join(settings.data_uri, "staging", report, f"trade_date={d}", f"{_safe(run_id)}.parquet")
     storage.write_parquet(uri, table)
     log.info("staged %s %s rows=%d -> %s", report, d, table.num_rows, uri)
-    return {"uri": uri, "sha256": payload.sha256, "rows": table.num_rows}
+    info = {"uri": uri, "sha256": payload.sha256, "rows": table.num_rows}
+    return {**info, "degraded": degraded} if report == CORPORATE_ACTIONS else info
 
 
-def stage_corporate_actions(bundle: dict) -> pl.DataFrame:
-    """Events from all three tables, as TWSE published them."""
+def stage_corporate_actions(bundle: dict, d: date) -> tuple[pl.DataFrame, str | None]:
+    """Events from all three tables, as TWSE published them.
+
+    Corporate actions enrich the day; quotes and flows are what the strategy team needs tomorrow.
+    So this stage degrades instead of failing: a table TWSE reshaped is skipped with an alert, and
+    a row without a usable factor (no before_close or reference price) is dropped with an alert.
+    Kept, such a row would read as factor 1.0 downstream (product over nulls), i.e. silently
+    unadjusted. The raw pages stay in Bronze; a parser fix and a rerun pick the events up.
+    Returns the events and, when a table was skipped, which one and why."""
     bronze = bundle["bronze"]
-    return pl.concat([parse(sources.load_bronze(bronze[r]).json()) for r, parse in CA_PARSERS.items()])
+    frames, skipped = [], []
+    for report, parse in CA_PARSERS.items():
+        try:
+            frames.append(parse(sources.load_bronze(bronze[report]).json()))
+        except transform.SchemaDriftError as exc:
+            alert("corporate_actions_unavailable", report=report, trade_date=d, error=str(exc))
+            skipped.append(f"{report}: {exc}")
+    events = pl.concat(frames) if frames else transform.empty_corporate_actions()
+    unusable = events.filter(pl.col("adj_factor").is_null())
+    if unusable.height:
+        alert("corporate_action_dropped", trade_date=d, rows=unusable.select("trade_date", "stock_id").to_dicts())
+    return events.filter(pl.col("adj_factor").is_not_null()), "; ".join(skipped) or None
 
 
 def _load_staged(staged: dict[str, dict]) -> dict[str, pl.DataFrame]:
@@ -258,8 +292,19 @@ def audit(d: date, staged: dict[str, dict], settings: Settings) -> dict:
         *audit_cross_table(quotes, institutional),
         *corporate_actions.audit_corporate_actions(actions, prev_close),
     ]
+    degraded = staged[CORPORATE_ACTIONS].get("degraded")
+    if degraded:
+        # Without the events, an ex-rights stock not marked "X" (one deferred past a closure)
+        # fails continuity. That is the right outcome; the message just points at the cause.
+        hint = f" (corporate actions unavailable this run: {degraded}; if these are ex-rights stocks, fix the source)"
+        checks = [
+            Check(ch.name, ch.passed, ch.detail + hint, ch.blocking)
+            if ch.name == "quotes_price_continuity" and not ch.passed
+            else ch
+            for ch in checks
+        ]
     enforce(checks, trade_date=d)
-    return {"checks": [ch.to_dict() for ch in checks]}
+    return {"checks": [ch.to_dict() for ch in checks], "corporate_actions_degraded": degraded}
 
 
 def publish(d: date, staged: dict[str, dict], settings: Settings, run_id: str) -> dict[str, dict]:
@@ -373,6 +418,8 @@ def run_day(d: date, settings: Settings, run_id: str | None = None, bodies: dict
         log.info("%s skipped: %s", d, status.reason)
         return {"trade_date": d.isoformat(), "skipped": status.reason}
     if not bodies and not all(reports_ready(d, settings).values()):
+        if not past_cutoff(d):
+            raise IncompleteDataError(f"{d}: not published yet; a closure is only decided after {CUTOFF_HOUR}:00")
         return {"trade_date": d.isoformat(), "skipped": resolve_missing_data(d, settings)}
 
     staged = {}

@@ -200,3 +200,69 @@ def test_reconcile_failure_undoes_the_run_everywhere(settings, monkeypatch, firs
     monkeypatch.setattr(gold, "build", real_build)
     counts = pipeline.run_day(d, settings)["row_counts"]
     assert counts["daily_market_wide"] == counts["daily_quotes"] == 1388
+
+
+def _break_parser(monkeypatch, report: str = "TWT49U") -> None:
+    def reshaped(doc):
+        raise transform.SchemaDriftError(f"{report}: missing TWSE columns: ['除權息參考價']")
+
+    monkeypatch.setitem(pipeline.CA_PARSERS, report, reshaped)
+
+
+def test_reshaped_corporate_action_table_does_not_block_the_day(settings, monkeypatch):
+    """TWSE renames a TWT49U column: its events are dropped with an alert, quotes and flows still
+    load. 2762 goes ex-dividend on 10-29 marked "X", so continuity does not need the event."""
+    _break_parser(monkeypatch)
+    result = pipeline.run_day(date(2026, 10, 29), settings)
+    assert result["row_counts"]["daily_quotes"] == result["row_counts"]["daily_market_wide"] == 1388
+    assert "TWT49U" in result["audit"]["corporate_actions_degraded"]
+    wide = iceberg_io.read(iceberg_io.get_table(settings, "daily_market_wide"), date(2026, 10, 29))
+    assert not wide["is_ex_event"].any()
+
+
+def test_without_events_a_deferred_ex_dividend_still_fails_continuity_and_says_why(settings, monkeypatch):
+    """10-27: the ex-dividends dated on the 10-23 typhoon take effect unmarked. Without TWT49U the
+    strongest check fails, as it should; the message points at the missing source."""
+    for d in (date(2026, 10, 22), date(2026, 10, 23)):
+        pipeline.run_day(d, settings)
+    _break_parser(monkeypatch)
+    with pytest.raises(DataQualityError, match="corporate actions unavailable") as exc:
+        pipeline.run_day(date(2026, 10, 27), settings)
+    assert [f.name for f in exc.value.failures] == ["quotes_price_continuity"]
+
+
+def test_event_without_a_usable_factor_is_dropped_with_an_alert(settings, caplog):
+    """A row whose before_close TWSE prints as "--" has no factor; kept, Gold would multiply nulls
+    into 1.0 and the stock would read as unadjusted without anyone knowing."""
+    d = date(2026, 3, 17)
+    doc = load_fixture("TWT49U", d)
+    row = next(r for r in doc["data"] if r[doc["fields"].index("股票代號")].strip() == "2330")
+    row[doc["fields"].index("除權息前收盤價")] = "--"
+
+    def land(report: str, body: bytes) -> str:
+        return sources.land_bronze(sources.RawPayload(report, d, body, "test://", datetime.now(UTC)), settings)
+
+    no_data = json.dumps({"stat": sources.NO_DATA_STAT}).encode()
+    bronze = {"TWT49U": land("TWT49U", json.dumps(doc, ensure_ascii=False).encode())}
+    bronze |= {r: land(r, no_data) for r in ("TWTAUU", "TWTCAU")}
+    events, degraded = pipeline.stage_corporate_actions({"window": [str(d), str(d)], "bronze": bronze}, d)
+    assert degraded is None
+    assert "2330" not in events["stock_id"].to_list() and events["adj_factor"].null_count() == 0
+    assert "corporate_action_dropped" in caplog.text and "2330" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("now", "expected"),
+    [("2026-10-29T18:59:00+08:00", False), ("2026-10-29T19:00:00+08:00", True), ("2026-10-30T08:00:00+08:00", True)],
+)
+def test_a_closure_is_only_decided_after_the_cutoff(now, expected):
+    assert pipeline.past_cutoff(date(2026, 10, 29), datetime.fromisoformat(now)) is expected
+
+
+def test_cli_run_before_the_cutoff_waits_instead_of_recording_a_closure(tmp_path, monkeypatch):
+    """08:30 on a trading day: nothing is published and MI_5MINS is empty too. That is 'not yet'."""
+    settings = _fixtures_with(tmp_path, ("HOLIDAY", "2026"))
+    monkeypatch.setattr(pipeline, "_now", lambda: datetime(2026, 10, 29, 8, 30, tzinfo=pipeline.TPE))
+    with pytest.raises(pipeline.IncompleteDataError, match="not published yet"):
+        pipeline.run_day(date(2026, 10, 29), settings)
+    assert not pipeline.is_closure_recorded(date(2026, 10, 29), settings)

@@ -10,8 +10,8 @@ DEMO := $(AIRFLOW) python /opt/airflow/scripts/demo_versioning.py
 DATE ?= 2026-10-29
 TABLE ?= daily_quotes
 VOLUME ?= 12345678
-STOCK ?= 2028
-START ?= 2026-10-22
+STOCK ?= 2762
+START ?= 2026-10-28
 END ?= $(DATE)
 METHOD ?= backward
 
@@ -87,7 +87,7 @@ demo-asof: ## [required] time travel: SNAPSHOT=<id> or AT='2026-10-30 18:00'
 	$(if $(or $(SNAPSHOT),$(AT)),,$(error give SNAPSHOT=<id> or AT='YYYY-MM-DD HH:MM'))
 	$(DEMO) as-of --table $(TABLE) $(if $(SNAPSHOT),--snapshot-id $(SNAPSHOT),--at "$(AT)") --stock 2330 2317
 
-demo-correct: ## [required] simulate a TWSE correction of DATE (2330 volume -> VOLUME), show before/after
+demo-correct: ## [required] simulate a TWSE correction of DATE (2330 volume -> VOLUME; change VOLUME to repeat)
 	$(DEMO) correct --date $(DATE) --stock 2330 --volume $(VOLUME)
 
 demo-rollback: ## [optional] undo the last run in every table it wrote (or only TABLE=...)
@@ -96,7 +96,7 @@ demo-rollback: ## [optional] undo the last run in every table it wrote (or only 
 demo-evolve: ## [optional] add a column; old rows and snapshots stay queryable
 	$(DEMO) add-column --table $(TABLE)
 
-demo-adjusted: ## adjusted prices at query time: STOCK=2028 START=2026-10-22 END=2026-10-29 [METHOD=forward]
+demo-adjusted: ## adjusted prices at query time: STOCK=2762 START=2026-10-28 END=2026-10-29 [METHOD=forward]
 	$(DEMO) adjusted --stock $(STOCK) --start $(START) --end $(END) --method $(METHOD) \
 		$(if $(SNAPSHOT),--snapshot-id $(SNAPSHOT))
 

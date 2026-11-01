@@ -11,12 +11,14 @@ check_trading_day ─> wait_for_reports ─> route ─┬─> extract_* ─> sta
 ```
 
 * **Not a trading day** (weekend / official holiday): `check_trading_day` short-circuits, the run is green.
-* **Late data**: the sensor re-checks every 10 min, alerts after 17:00, gives up at 19:00.
+* **Late data**: the sensor re-checks every 10 min, alerts after 17:00, gives up at 19:00. A TWSE
+  outage while waiting is "not ready yet", not a task failure.
 * **No data at 19:00 on a 'trading day'** (typhoon closures are never in the calendar): TWSE's own
   intraday statistics (MI_5MINS) decide. No intraday records -> closure, recorded, run green;
   the market traded -> fail + alert.
 * **Bad data** (audit failure, schema drift): fail fast, no retries, alert. Iceberg is untouched,
-  because publishing only starts after every check passed.
+  because publishing only starts after every check passed. Corporate actions are the exception:
+  a reshaped table or an unusable row is dropped with an alert, so quotes and flows still load.
 * **Counts off after publishing** (reconcile): the run is undone in every table, Gold first, then
   the task fails and alerts. Readers stay on the last good version.
 
@@ -34,8 +36,6 @@ from airflow.sdk.exceptions import AirflowFailException
 from airflow.timetables.trigger import CronTriggerTimetable
 
 TPE = pendulum.timezone("Asia/Taipei")
-DELAY_ALERT_HOUR = 17  # both reports are normally out by ~16:30
-CUTOFF_HOUR = 19
 REPORTS = {"MI_INDEX": "quotes", "T86": "institutional", "CORPORATE_ACTIONS": "corporate_actions"}
 
 log = logging.getLogger(__name__)
@@ -102,7 +102,7 @@ def _on_dag_run_failure(context) -> None:
     doc_md=__doc__,
 )
 def twse_daily_etl():
-    @task.short_circuit
+    @task.short_circuit(retries=3, retry_delay=timedelta(minutes=2), retry_exponential_backoff=True)
     def check_trading_day() -> str | bool:
         from twse_etl.pipeline import trading_day_status
 
@@ -116,15 +116,25 @@ def twse_daily_etl():
 
     @task.sensor(poke_interval=600, timeout=6 * 3600, mode="reschedule")
     def wait_for_reports(trade_date: str) -> PokeReturnValue:
+        """A poke that cannot reach TWSE is 'not ready yet' until the cutoff: the data normally
+        arrives long before 19:00, and failing the run over a 15-minute outage would need a person."""
+        import requests
+
         from twse_etl.alerts import alert
-        from twse_etl.pipeline import reports_ready
+        from twse_etl.pipeline import CUTOFF_HOUR, DELAY_ALERT_HOUR, reports_ready
 
         d = date.fromisoformat(trade_date)
-        counts = reports_ready(d, _settings())
-        if all(counts.values()):
-            return PokeReturnValue(is_done=True, xcom_value="ready")
         now = pendulum.now(TPE)
         day_start = pendulum.datetime(d.year, d.month, d.day, tz=TPE)
+        try:
+            counts = reports_ready(d, _settings())
+        except requests.RequestException as exc:
+            if now >= day_start.add(hours=CUTOFF_HOUR):
+                raise
+            log.warning("%s: TWSE unreachable (%s); will poke again", trade_date, exc)
+            return PokeReturnValue(is_done=False)
+        if all(counts.values()):
+            return PokeReturnValue(is_done=True, xcom_value="ready")
         if now >= day_start.add(hours=CUTOFF_HOUR):
             alert("data_wait_cutoff", trade_date=trade_date, row_counts=counts)
             return PokeReturnValue(is_done=True, xcom_value="missing")
@@ -136,7 +146,7 @@ def twse_daily_etl():
     def route(status: str) -> list[str] | str:
         return [f"extract_{slug}" for slug in REPORTS.values()] if status == "ready" else "check_unscheduled_closure"
 
-    @task(retries=0)
+    @task(retries=2, retry_delay=timedelta(minutes=2))  # network only: MissingDataError skips retries
     def check_unscheduled_closure(trade_date: str) -> str:
         from twse_etl.pipeline import resolve_missing_data
 
