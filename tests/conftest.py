@@ -33,7 +33,7 @@ def staged_actions(home: Path, end: date, start: date | None = None) -> pl.DataF
     """Corporate actions over [start, end] exactly as the pipeline stages them, from fixtures."""
     settings = make_settings(home)
     bundle = json.loads(pipeline.extract_corporate_actions(end, settings, start=start))
-    return pipeline.stage_corporate_actions(bundle)
+    return pipeline.stage_corporate_actions(bundle, end)[0]
 
 
 @pytest.fixture

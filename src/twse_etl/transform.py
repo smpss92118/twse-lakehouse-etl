@@ -151,7 +151,7 @@ _CA_SCHEMA = {
 def _corporate_action_frame(doc: dict, mapping: dict[str, str], source: str, **constants: str) -> pl.DataFrame:
     """One corporate-action table onto the shared shape. 'No data' is a normal day without events."""
     if str(doc.get("stat", "")).upper() != "OK" or not doc.get("data"):
-        return pl.DataFrame(schema=_CA_SCHEMA)
+        return empty_corporate_actions()
     raw = _frame(doc["fields"], doc["data"], mapping)
     optional = ("dividend_value", "note")
     absent = [col for col in optional if col not in raw.columns]
@@ -173,6 +173,10 @@ def _corporate_action_frame(doc: dict, mapping: dict[str, str], source: str, **c
         _price("open_ref_price"),
         (_num("ref_price").cast(pl.Float64) / _num("before_close").cast(pl.Float64)).alias("adj_factor"),
     )
+
+
+def empty_corporate_actions() -> pl.DataFrame:
+    return pl.DataFrame(schema=_CA_SCHEMA)
 
 
 def parse_corporate_actions(doc: dict) -> pl.DataFrame:

@@ -94,6 +94,9 @@ make status                      # 各次 run 的狀態
 
 UI 上按 Trigger 也可以，在 config 填 `trade_date`；留空就是排程當天。
 排程：`30 15 * * 1-5`（Asia/Taipei），`catchup=False`、`max_active_runs=1`。
+第一次 `make up`（metadata DB 還是空的）建出來的 DAG 是暫停的（`DAGS_ARE_PAUSED_AT_CREATION`），
+`make trigger` 會順便打開，之後重啟都維持打開；
+要讓 15:30 的排程自己跑，在 UI 打開開關或先跑一次 `make trigger`。
 
 ```
 check_trading_day ─> wait_for_reports ─> route ─┬─> extract_{quotes,institutional,corporate_actions}
@@ -108,15 +111,25 @@ check_trading_day ─> wait_for_reports ─> route ─┬─> extract_{quotes,in
 | 19:00 兩份都沒資料 | 問證交所盤中統計（MI_5MINS）：明確「沒有資料」→ 臨時休市，記錄證據後略過（綠燈）；其他一律失敗＋告警（第 7 節） |
 | 19:00 只出了一份（例如行情有、法人沒有） | 市場有開，只是晚了：直接失敗＋告警，資料到了再重跑 |
 | 前一個交易日沒載入 | 稽核擋下並指名要先補哪一天，不會誤報成「價格不連續」 |
-| 網路 / TWSE 暫時錯誤 | extract 重試 3 次（指數退避），用盡才告警 |
-| 稽核失敗、欄位改名（寫入前） | 不重試，直接失敗＋告警；Iceberg 完全沒動 |
+| 網路 / TWSE 暫時錯誤 | 交易日判斷、擷取重試 3 次（指數退避）；等待中的 sensor 把它當「還沒好」，到 19:00 才算失敗 |
+| 稽核失敗、行情或法人表欄位改名（寫入前） | 不重試，直接失敗＋告警；Iceberg 完全沒動 |
+| 公司行動表改了欄位、某列算不出因子 | 那張表／那列丟掉並告警，行情和法人照常入庫；只有颱風順延、不標 X 的除權息會讓連續性檢查擋下，訊息會指出原因 |
 | 對帳失敗（寫入後） | 自動撤銷本次 run 在每張表的寫入（Gold 先），再失敗＋告警；讀的人停在上一個正確版本 |
 
 告警目前是 `ALERT <event> {json}` 的 log 行（`twse_etl/alerts.py`，換成 Slack/SNS 只改這一個函式）。
 
 ## 3. 版本控制示範（Iceberg）
 
-在 Airflow 容器內執行，讀的是 DAG 寫的同一個 catalog：
+在 Airflow 容器內執行，讀的是 DAG 寫的同一個 catalog（`.local/lake`）。示範前先把資料跑進去：
+
+```bash
+make up                          # 也會把最新程式部署進容器
+make trigger DATE=2026-10-28     # 等綠燈再跑下一天：連續性檢查要讀前一個交易日
+make trigger DATE=2026-10-29
+```
+
+`demo-correct` 需要那一天的 Bronze，所以那天必須用 DAG 跑過。同一個 `VOLUME` 只能示範一次：第二次最新的
+Bronze 已經是修正版，四張表都會 `skipped (identical content)`；重做時換 `VOLUME=`。
 
 | | 指令 | 示範什麼 |
 |---|---|---|
@@ -125,7 +138,7 @@ check_trading_day ─> wait_for_reports ─> route ─┬─> extract_{quotes,in
 | 必做 3 | `make demo-correct DATE=2026-10-29` | 模擬證交所修正 2330 成交股數後重抓：無重複、新舊兩版都查得到 |
 | 選做 1 | `make demo-rollback` | 退回最近一次 run 之前：該 run 寫過的每張表一起退（`TABLE=…` 只退一張） |
 | 選做 2 | `make demo-evolve TABLE=daily_quotes` | 中途加欄位，舊資料與舊 snapshot 照樣可查 |
-| 加做 | `make demo-adjusted STOCK=2028 START=2026-10-22 END=2026-10-29` | 還原權值（前復權；`METHOD=forward` 後復權），查詢時計算、不改歷史（第 6 節） |
+| 加做 | `make demo-adjusted`（= `STOCK=2762 START=2026-10-28 END=2026-10-29`） | 還原權值（前復權；`METHOD=forward` 後復權），查詢時計算、不改歷史（第 6 節） |
 
 `demo-correct` 實際輸出（節錄）：
 
@@ -169,7 +182,7 @@ make bigdata-down
 ## 4. 測試
 
 ```bash
-make test       # 67 個，不連網，約 4 秒
+make test       # 74 個，不連網，約 4 秒
 make dag-test   # 在正式 Airflow image 內：DagBag 無 import error、無循環、task 順序符合規格
 make lint
 ```
@@ -262,7 +275,9 @@ Bronze / staging 寫 `s3://` 在設計上支援，但目前只有 Iceberg wareho
 | 寫入後 | Silver 筆數 = staging 筆數；**Gold 筆數 = 行情筆數**；Gold 有法人資料的列 = 法人筆數 | 撤銷本次寫入＋失敗告警 |
 
 24 項 = 22 項擋 + 2 項只告警。只告警的 2 項比對的是公司行動這個「加值欄位」：對不上時照證交所公布值入庫並告警，
-不讓它擋住策略團隊明天要用的 1,390 檔行情與法人資料。
+不讓它擋住策略團隊明天要用的 1,390 檔行情與法人資料。公司行動表本身壞掉也一樣不擋：欄位改名就丟掉那張表、
+某列沒有前收或參考價就丟掉那一列，都發告警（`corporate_actions_unavailable`、`corporate_action_dropped`），原始頁面留在 Bronze，
+修好解析後重跑就補上。唯一的例外是颱風順延、不標 X 的除權息：少了事件，連續性檢查會擋下那一天，失敗訊息會指出原因。
 
 Gold 用 **LEFT JOIN**（從行情出發），T86 沒列的股票法人欄位填 0、`institutional_reported=false`。
 異常情境 2（合併表 800 檔、行情 1,000 多檔、DAG 全綠）有三道防線：寫入前的「法人覆蓋率」、寫入後的「Gold = 行情筆數」，
@@ -327,6 +342,8 @@ make trino-sql SQL="SELECT trade_date, close, adj_factor,
 - 不用行事曆以外的公告或新聞：人事行政總處公布的是「台北市停班」，不等於「證交所休市」；
   問交易所「那天有沒有成交」最直接，結果確定、免金鑰，用的也是同一個資料源。
 - fixture 模式下，沒錄到 MI_5MINS 的日子一律當異常（不會因為「找不到檔案」被判成休市）。
+- 19:00 前不判斷：開盤前 MI_5MINS 本來就是空的。CLI 在 cutoff 前跑到沒資料的日子會回 `IncompleteDataError`，
+  DAG 則由 sensor 等到 cutoff 才走這條路。
 - 人工補記（例如事後確認）：`python -m twse_etl.pipeline record-closure --date 2026-10-23 --reason "颱風"`。
   記錄過的休市日，下一個交易日的「前一交易日已載入」檢查才會跳過它。
 
@@ -357,6 +374,7 @@ make trino-sql SQL="SELECT trade_date, close, adj_factor,
 |---|---|---|
 | 變更走 PR：[#2](https://github.com/smpss92118/twse-lakehouse-etl/pull/2) S3 + Postgres catalog + Trino 配置 | [CI on PR](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41055269301)（`unit-tests` + `dag-integrity`） | success |
 | merge 到 main 後：CI → CD（`workflow_run` 觸發，打包 `airflow-dags-<sha>` artifact；`deploy-aws` 未啟用所以 skipped） | [CI](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41057397362) → [CD](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41057539182) | success |
+| [#5](https://github.com/smpss92118/twse-lakehouse-etl/pull/5) 收斂到題目範圍（改 DAG）→ merge → main 的 CI → CD | [CI on PR](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41304303953) → [CI](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41304530835) → [CD](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41304617177) | success |
 
 CD 的觸發條件：上游 CI 必須是**本 repo** `main` 的 **push** 且成功（或手動 `workflow_dispatch`）。
 fork 的 PR、或任何分支名叫 main 的外部分支，都不會觸發部署。
