@@ -29,7 +29,6 @@ SCHEMAS = {
     "institutional_flows": c.INSTITUTIONAL_SCHEMA,
     "corporate_actions": c.CORPORATE_ACTIONS_SCHEMA,
     "daily_market_wide": c.GOLD_SCHEMA,
-    "review_decisions": c.REVIEW_DECISIONS_SCHEMA,
 }
 
 
@@ -134,16 +133,36 @@ def publish(
     return PublishResult(name, head.snapshot_id if head else None, data.num_rows, skipped=False)
 
 
+def snapshot_before_run(tbl: Table, run_id: str) -> int | None:
+    """Newest ancestor not written by run_id, i.e. the table as it was before that run. None when the
+    run did not change this table (identical content is skipped) or wrote its very first snapshot."""
+    head = tbl.current_snapshot()
+    if head is None or head.summary.get("run_id") != run_id:
+        return None
+    return next((s.snapshot_id for s in ancestors_of(head, tbl.metadata) if s.summary.get("run_id") != run_id), None)
+
+
+def undo_run(tbl: Table, run_id: str, trade_date: date, window_start: date | None = None) -> str:
+    """Put the table back to where it was before run_id. Normally a rollback to the previous snapshot:
+    the bad snapshots leave the current lineage, so a rerun is compared with the good version. When
+    the run wrote the table's first data there is nothing to roll back to, so its rows are deleted;
+    that delete is tagged as this day's version, so a rerun with the same content is not skipped."""
+    head = tbl.current_snapshot()
+    if head is None or head.summary.get("run_id") != run_id:
+        return "unchanged"
+    target = snapshot_before_run(tbl, run_id)
+    if target is not None:
+        tbl.manage_snapshots().rollback_to_snapshot(target).commit()
+        return f"rolled back to snapshot {target}"
+    props = {"run_id": f"{run_id}:undo", "trade_date": trade_date.isoformat(), "content_sha256": "undone"}
+    tbl.delete(date_filter(window_start or trade_date, trade_date), snapshot_properties=props)
+    return "first load deleted"
+
+
 def read(tbl: Table, start: date, end: date | None = None, snapshot_id: int | None = None) -> pl.DataFrame:
     if tbl.current_snapshot() is None:
         return pl.from_arrow(tbl.schema().as_arrow().empty_table())
     return tbl.scan(row_filter=date_filter(start, end), snapshot_id=snapshot_id).to_polars()
-
-
-def read_all(tbl: Table) -> pl.DataFrame:
-    if tbl.current_snapshot() is None:
-        return pl.from_arrow(tbl.schema().as_arrow().empty_table())
-    return tbl.scan().to_polars()
 
 
 def loaded_dates(tbl: Table) -> list[date]:

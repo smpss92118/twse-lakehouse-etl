@@ -2,7 +2,8 @@
 
 The schedule also lists trading days (e.g. "國曆新年開始交易日", "農曆春節前最後交易日"), so a listed
 date is only a closure when its name does not mark it as a trading day. Ad-hoc closures such as
-typhoon days are never in this schedule; they are caught later by the data-wait + LLM fallback.
+typhoon days are never in this schedule; after the data-wait cutoff, TWSE's own intraday statistics
+(MI_5MINS) tell whether the market opened (pipeline.resolve_missing_data).
 """
 
 from __future__ import annotations
