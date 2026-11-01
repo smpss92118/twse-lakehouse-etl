@@ -21,18 +21,15 @@ ENDPOINTS = {
     "MI_INDEX": "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX",
     "T86": "https://www.twse.com.tw/rwd/zh/fund/T86",
     "TWT49U": "https://www.twse.com.tw/rwd/zh/exRight/TWT49U",  # ex-rights / ex-dividend results
-    "TWT49UDetail": "https://www.twse.com.tw/rwd/zh/exRight/TWT49UDetail",  # per-event dividend terms
     "TWTAUU": "https://www.twse.com.tw/rwd/zh/reducation/TWTAUU",  # capital reduction resumption prices
-    "TWTAVUDetail": "https://www.twse.com.tw/rwd/zh/reducation/TWTAVUDetail",  # per-event reduction terms
     "TWTCAU": "https://www.twse.com.tw/rwd/zh/split/TWTCAU",  # ETF split / reverse split resumption prices
     "HOLIDAY": "https://www.twse.com.tw/rwd/zh/holidaySchedule/holidaySchedule",
+    # 5-second order/trade statistics: 09:00..13:30 on a day the market opened, "no data" when closed.
+    "MI_5MINS": "https://www.twse.com.tw/rwd/zh/afterTrading/MI_5MINS",
 }
 
 # Corporate-action tables, fetched as a date range so events dated on a closure day are kept.
 RANGE_REPORTS = ("TWT49U", "TWTAUU", "TWTCAU")
-# Per-event terms (cash, share ratios, subscription) behind TWT49U and TWTAUU rows, keyed by the
-# row's 詳細資料 cell "<stock_id>,<yyyymmdd>".
-DETAIL_REPORTS = {"TWT49U": "TWT49UDetail", "TWTAUU": "TWTAVUDetail"}
 
 _HEADERS = {"User-Agent": "Mozilla/5.0 (twse-etl; +https://github.com)", "Accept": "application/json"}
 _MIN_INTERVAL_S = 3.0  # TWSE blocks bursts of more than ~3 requests per 5 seconds
@@ -55,48 +52,37 @@ class RawPayload:
         return json.loads(self.body)
 
 
-def detail_keys(doc: dict) -> list[str]:
-    """'<stock_id>,<yyyymmdd>' keys of the per-event detail pages linked from a range report."""
-    if doc.get("stat") != "OK" or "詳細資料" not in (doc.get("fields") or []):
-        return []
-    col = doc["fields"].index("詳細資料")
-    return [",".join(part.strip() for part in row[col].split(",")) for row in doc.get("data", [])]
-
-
-def _params(report: str, d: date, start: date, key: str | None) -> dict[str, str]:
+def _params(report: str, d: date, start: date) -> dict[str, str]:
     ymd = d.strftime("%Y%m%d")
     if report in RANGE_REPORTS:
         return {"startDate": start.strftime("%Y%m%d"), "endDate": ymd, "response": "json"}
-    if report in DETAIL_REPORTS.values():
-        stock, day = key.split(",")
-        return {"STK_NO": stock, "T1" if report == "TWT49UDetail" else "FILE_DATE": day, "response": "json"}
     return {
         "MI_INDEX": {"date": ymd, "type": "ALLBUT0999", "response": "json"},
         "T86": {"date": ymd, "selectType": "ALLBUT0999", "response": "json"},
+        "MI_5MINS": {"date": ymd, "response": "json"},
         "HOLIDAY": {"date": f"{d.year}0101", "response": "json"},
     }[report]
 
 
-def fixture_path(fixture_dir: Path, report: str, d: date, key: str | None = None) -> Path:
-    if key:
-        return fixture_dir / report / f"{key.replace(',', '_')}.json.gz"
+def fixture_path(fixture_dir: Path, report: str, d: date) -> Path:
     name = str(d.year) if report == "HOLIDAY" else d.strftime("%Y%m%d")
     return fixture_dir / report / f"{name}.json.gz"
 
 
-def _fixture_doc(fixture_dir: Path, report: str, d: date, key: str | None = None) -> dict:
-    path = fixture_path(fixture_dir, report, d, key)
+def _fixture_doc(fixture_dir: Path, report: str, d: date) -> dict:
+    path = fixture_path(fixture_dir, report, d)
     if not path.exists():
-        return {"stat": NO_DATA_STAT}
+        # Not recorded = not published yet. Except MI_5MINS: its "no data" means the market was
+        # closed, which an unrecorded day must never be able to claim.
+        return {"stat": "fixture not recorded" if report == "MI_5MINS" else NO_DATA_STAT}
     return json.loads(gzip.decompress(path.read_bytes()))
 
 
-def fetch(report: str, d: date, settings: Settings, start: date | None = None, key: str | None = None) -> RawPayload:
+def fetch(report: str, d: date, settings: Settings, start: date | None = None) -> RawPayload:
     """One HTTP GET (or fixture read). A missing fixture behaves like 'not published yet'.
 
     `start` only applies to RANGE_REPORTS, fetched as a range so that events dated on a market
-    closure (e.g. a typhoon day) are picked up by the next trading day. `key` selects one event of
-    a DETAIL_REPORTS page.
+    closure (e.g. a typhoon day) are picked up by the next trading day.
     """
     start = start or d
     if settings.source == "fixture":
@@ -107,15 +93,15 @@ def fetch(report: str, d: date, settings: Settings, start: date | None = None, k
             fields = next((doc["fields"] for doc in docs if doc.get("fields")), [])
             doc = {"stat": "OK", "fields": fields, "data": data} if data else {"stat": NO_DATA_STAT}
         else:
-            doc = _fixture_doc(settings.fixture_dir, report, d, key)
+            doc = _fixture_doc(settings.fixture_dir, report, d)
         body = json.dumps(doc, ensure_ascii=False).encode()
-        return RawPayload(report, d, body, f"fixture://{report}/{key or f'{start}..{d}'}", datetime.now(UTC))
+        return RawPayload(report, d, body, f"fixture://{report}/{start}..{d}", datetime.now(UTC))
 
     global _last_request_at
     wait = _MIN_INTERVAL_S - (time.monotonic() - _last_request_at)
     if wait > 0:
         time.sleep(wait)
-    resp = requests.get(ENDPOINTS[report], params=_params(report, d, start, key), headers=_HEADERS, timeout=30)
+    resp = requests.get(ENDPOINTS[report], params=_params(report, d, start), headers=_HEADERS, timeout=30)
     _last_request_at = time.monotonic()
     resp.raise_for_status()
     return RawPayload(report, d, resp.content, resp.url, datetime.now(UTC))

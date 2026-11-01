@@ -38,7 +38,7 @@ def _every_check(quotes, inst, prev_close, actions):
         + audit_price_continuity(quotes, prev_close, actions)
         + audit_institutional(inst, D)
         + audit_cross_table(quotes, inst)
-        + corporate_actions.audit_corporate_actions(actions, quotes, prev_close, D)
+        + corporate_actions.audit_corporate_actions(actions, prev_close)
     )
 
 

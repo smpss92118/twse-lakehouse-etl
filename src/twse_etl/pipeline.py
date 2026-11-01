@@ -17,17 +17,7 @@ from datetime import UTC, date, datetime, timedelta
 
 import polars as pl
 
-from twse_etl import (
-    contracts,
-    corporate_actions,
-    gold,
-    holiday_fallback,
-    iceberg_io,
-    sources,
-    storage,
-    trading_calendar,
-    transform,
-)
+from twse_etl import contracts, corporate_actions, gold, iceberg_io, sources, storage, trading_calendar, transform
 from twse_etl.alerts import alert
 from twse_etl.config import Settings
 from twse_etl.validate import (
@@ -41,7 +31,7 @@ from twse_etl.validate import (
 
 log = logging.getLogger("twse_etl.pipeline")
 
-# One logical report built from several TWSE tables (sources.RANGE_REPORTS + their detail pages).
+# One logical report built from the three TWSE corporate-action tables (sources.RANGE_REPORTS).
 CORPORATE_ACTIONS = "CORPORATE_ACTIONS"
 REPORT_TABLES = {"MI_INDEX": "daily_quotes", "T86": "institutional_flows", CORPORATE_ACTIONS: "corporate_actions"}
 REPORT_SCHEMAS = {
@@ -54,7 +44,6 @@ CA_PARSERS = {
     "TWTAUU": transform.parse_capital_reductions,
     "TWTCAU": transform.parse_etf_splits,
 }
-DETAIL_FIELDS = {"TWT49UDetail": contracts.DIVIDEND_DETAIL_FIELDS, "TWTAVUDetail": contracts.REDUCTION_DETAIL_FIELDS}
 GOLD_TABLE = "daily_market_wide"
 WAIT_REPORTS = ("MI_INDEX", "T86")
 
@@ -64,7 +53,7 @@ class IncompleteDataError(RuntimeError):
 
 
 class MissingDataError(RuntimeError):
-    """Trading day, cutoff passed, no data, and no evidenced closure. Not retriable."""
+    """Trading day, cutoff passed, no data, and TWSE does not confirm a closure. Not retriable."""
 
 
 def _safe(run_id: str) -> str:
@@ -100,28 +89,34 @@ def published_rows(d: date, settings: Settings) -> dict[str, int]:
     return counts
 
 
+CLOSURE_REASON = "臨時休市：證交所當日沒有盤中成交統計 (MI_5MINS)"
+
+
 def resolve_missing_data(d: date, settings: Settings) -> str:
     """Called after the data-wait cutoff. Returns the closure reason, or raises MissingDataError.
 
-    The LLM is only asked when TWSE published nothing for d. If one report is out and the other
-    is late or partial, the market was open, so no verdict could turn the day into a closure."""
+    Typhoon closures are announced the evening before and never reach the official calendar, and
+    TWSE answers them like a holiday: no data. So ask the exchange whether anything traded that day:
+    MI_5MINS (5-second trade statistics) covers 09:00-13:30 whenever the market opened. A closure
+    needs all three: the cutoff passed, neither report has a single row, and TWSE's explicit
+    'no data' for the intraday statistics. Anything else is a data anomaly (fail closed)."""
     published = published_rows(d, settings)
     if any(published.values()):
         alert("data_incomplete_after_cutoff", trade_date=d, row_counts=published)
         raise MissingDataError(f"{d}: market was open (rows published: {published}) but data is incomplete")
-    try:
-        verdict = holiday_fallback.ask_llm(d)
-    except holiday_fallback.HolidayCheckError as exc:
-        alert("data_missing_llm_unavailable", trade_date=d, error=str(exc))
-        raise MissingDataError(f"{d}: no TWSE data and closure check failed: {exc}") from exc
 
-    if verdict.is_holiday and verdict.evidence_url:
-        record_closure(d, settings, {**verdict.to_dict(), "status": "pending_human_confirmation"})
-        alert("unscheduled_closure_detected", trade_date=d, reason=verdict.reason, evidence=verdict.evidence_url)
-        return verdict.reason
+    payload = sources.fetch("MI_5MINS", d, settings)
+    evidence = sources.land_bronze(payload, settings)  # the answer is kept, like every other payload
+    doc = payload.json()
+    if doc.get("stat") == sources.NO_DATA_STAT:
+        record = {"reason": CLOSURE_REASON, "evidence": evidence, "source_url": payload.source_url}
+        record_closure(d, settings, {**record, "status": "confirmed_by_twse_data"})
+        alert("unscheduled_closure_detected", trade_date=d, evidence=evidence)
+        return CLOSURE_REASON
 
-    alert("data_missing_on_trading_day", trade_date=d, llm_verdict=verdict.to_dict())
-    raise MissingDataError(f"{d}: trading day per calendar, no TWSE data, no evidenced closure")
+    intraday = transform.row_count("MI_5MINS", doc)
+    alert("data_missing_on_trading_day", trade_date=d, intraday_records=intraday, stat=doc.get("stat"))
+    raise MissingDataError(f"{d}: TWSE lists {intraday} intraday records (stat {doc.get('stat')!r}), no closing data")
 
 
 def _closure_uri(d: date, settings: Settings) -> str:
@@ -162,17 +157,12 @@ def ca_window_start(d: date, settings: Settings) -> date:
 
 
 def extract_corporate_actions(d: date, settings: Settings, start: date | None = None) -> bytes:
-    """Every corporate-action table over (previous loaded trading day, d] and each event's term page,
-    each landed raw in Bronze. Returns the bundle: the exact Bronze files this run read."""
+    """The three corporate-action tables over (previous loaded trading day, d], each landed raw in
+    Bronze. Returns the bundle: the exact Bronze files this run read."""
     start = start or ca_window_start(d, settings)
-    bronze: dict[str, str | dict[str, str]] = {}
+    bronze = {}
     for report in sources.RANGE_REPORTS:
-        payload = sources.fetch(report, d, settings, start=start)
-        bronze[report] = sources.land_bronze(payload, settings)
-        detail = sources.DETAIL_REPORTS.get(report)
-        for key in sources.detail_keys(payload.json()) if detail else []:
-            page = sources.fetch(detail, d, settings, key=key)
-            bronze.setdefault(detail, {})[key] = sources.land_bronze(page, settings)
+        bronze[report] = sources.land_bronze(sources.fetch(report, d, settings, start=start), settings)
     return json.dumps({"window": [start.isoformat(), d.isoformat()], "bronze": bronze}, indent=1).encode()
 
 
@@ -203,7 +193,7 @@ def stage(report: str, d: date, bronze_uri: str, settings: Settings, run_id: str
         df = transform.parse_institutional(doc, d)
         extra = transform.unexpected_fields(doc["fields"], contracts.INSTITUTIONAL_FIELDS)
     else:
-        df = stage_corporate_actions(doc, d, settings)
+        df = stage_corporate_actions(doc)
         extra = []
     if extra:
         alert("schema_drift_new_columns", report=report, trade_date=d, columns=extra)
@@ -221,29 +211,10 @@ def stage(report: str, d: date, bronze_uri: str, settings: Settings, run_id: str
     return {"uri": uri, "sha256": payload.sha256, "rows": table.num_rows}
 
 
-def stage_corporate_actions(bundle: dict, d: date, settings: Settings) -> pl.DataFrame:
-    """Events from all three tables, with the official formula recomputed from each event's terms
-    and the ex-dividend reference price compared with the third-party vendor."""
+def stage_corporate_actions(bundle: dict) -> pl.DataFrame:
+    """Events from all three tables, as TWSE published them."""
     bronze = bundle["bronze"]
-    events = pl.concat([parse(sources.load_bronze(bronze[r]).json()) for r, parse in CA_PARSERS.items()])
-    terms = {}
-    for report, detail in sources.DETAIL_REPORTS.items():
-        for key, uri in bronze.get(detail, {}).items():
-            parsed = transform.parse_event_terms(sources.load_bronze(uri).json(), DETAIL_FIELDS[detail])
-            if parsed is not None:
-                terms[(report, key)] = parsed
-    events = corporate_actions.attach_formula(events, corporate_actions.terms_frame(terms))
-    vendor = corporate_actions.load_vendor(settings.vendor_dir, date.fromisoformat(bundle["window"][0]), d)
-    events = corporate_actions.attach_vendor(events, vendor)
-    return corporate_actions.apply_decisions(events, review_decisions(settings))
-
-
-def review_decisions(settings: Settings) -> pl.DataFrame:
-    """Every human review so far (see review.py); empty before the first one."""
-    catalog = iceberg_io.get_catalog(settings)
-    if not catalog.table_exists(f"{settings.namespace}.review_decisions"):
-        return pl.from_arrow(contracts.REVIEW_DECISIONS_SCHEMA.empty_table())
-    return iceberg_io.read_all(iceberg_io.get_table(settings, "review_decisions", catalog))
+    return pl.concat([parse(sources.load_bronze(bronze[r]).json()) for r, parse in CA_PARSERS.items()])
 
 
 def _load_staged(staged: dict[str, dict]) -> dict[str, pl.DataFrame]:
@@ -285,24 +256,10 @@ def audit(d: date, staged: dict[str, dict], settings: Settings) -> dict:
         *audit_price_continuity(quotes, prev_close, actions),
         *audit_institutional(institutional, d),
         *audit_cross_table(quotes, institutional),
-        *corporate_actions.audit_corporate_actions(actions, quotes, prev_close, d),
+        *corporate_actions.audit_corporate_actions(actions, prev_close),
     ]
     enforce(checks, trade_date=d)
-    return {
-        "checks": [ch.to_dict() for ch in checks],
-        "unexplained_x": corporate_actions.unexplained_x(quotes, actions),
-    }
-
-
-def events_to_review(d: date, settings: Settings) -> list[dict]:
-    """After publishing: events whose cross-checks disagree and that nobody has reviewed yet.
-    A reviewed event is never reopened, whatever its checks still say."""
-    actions = iceberg_io.read(iceberg_io.get_table(settings, "corporate_actions"), ca_window_start(d, settings), d)
-    quotes = iceberg_io.read(iceberg_io.get_table(settings, "daily_quotes"), d)
-    found = corporate_actions.disagreements(actions, quotes, _prev_close(d, settings), d)
-    reviewed = actions.filter(pl.col("review_decision_id").is_not_null())
-    todo = corporate_actions.events_to_review(found).join(reviewed, on=["trade_date", "stock_id"], how="anti")
-    return [{**row, "trade_date": row["trade_date"].isoformat(), "run_date": d.isoformat()} for row in todo.to_dicts()]
+    return {"checks": [ch.to_dict() for ch in checks]}
 
 
 def publish(d: date, staged: dict[str, dict], settings: Settings, run_id: str) -> dict[str, dict]:
@@ -350,9 +307,23 @@ def build_gold(d: date, settings: Settings, run_id: str) -> dict:
     return result.to_dict()
 
 
+def undo(d: date, settings: Settings, run_id: str) -> dict[str, str]:
+    """Take back everything run_id published for d, Gold first: after a failed reconcile the strategy
+    team keeps reading the last good version instead of the one that failed the check."""
+    catalog = iceberg_io.get_catalog(settings)
+    window_start = ca_window_start(d, settings)
+    undone = {}
+    for name in (GOLD_TABLE, *REPORT_TABLES.values()):
+        start = window_start if name == REPORT_TABLES[CORPORATE_ACTIONS] else d
+        undone[name] = iceberg_io.undo_run(iceberg_io.get_table(settings, name, catalog), run_id, d, start)
+    alert("run_undone", trade_date=d, run_id=run_id, tables=undone)
+    return undone
+
+
 def reconcile(d: date, settings: Settings, run_id: str, staged: dict[str, dict], audit_report: dict) -> dict:
     """Row-count check on what is actually committed, then a manifest a strategy analyst can cite:
-    'signals for D used daily_market_wide snapshot S'."""
+    'signals for D used daily_market_wide snapshot S'. If a count is off, the run is undone before
+    the task fails, so a bad merge never stays visible (anomaly scenario 2)."""
     catalog = iceberg_io.get_catalog(settings)
     tables = {name: iceberg_io.get_table(settings, name, catalog) for name in (*REPORT_TABLES.values(), GOLD_TABLE)}
     counts, snapshots = {}, {}
@@ -373,12 +344,14 @@ def reconcile(d: date, settings: Settings, run_id: str, staged: dict[str, dict],
         Check("gold_flows_equal_institutional", reported == counts["institutional_flows"],
               f"gold rows with flows={reported} institutional={counts['institutional_flows']}"),
     ]  # fmt: skip
+    failed = any(not ch.passed and ch.blocking for ch in checks)
     manifest = {
         "trade_date": d.isoformat(),
         "run_id": run_id,
         "snapshots": snapshots,
         "row_counts": counts,
         "reconcile": [ch.to_dict() for ch in checks],
+        "undone": undo(d, settings, run_id) if failed else {},
         "audit": audit_report,
         "written_at": datetime.now(UTC).isoformat(),
     }
@@ -421,12 +394,6 @@ def latest_bronze(settings: Settings, report: str, d: date) -> bytes:
     return storage.read_bytes(files[-1])
 
 
-def rerun_from_bronze(d: date, settings: Settings, run_id: str) -> dict:
-    """Re-run a day on the exact payloads it last loaded: picks up review decisions (or a parser
-    fix) without asking TWSE again. Unchanged tables are skipped by the content fingerprint."""
-    return run_day(d, settings, run_id=run_id, bodies={r: latest_bronze(settings, r, d) for r in REPORT_TABLES})
-
-
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     parser = argparse.ArgumentParser(prog="python -m twse_etl.pipeline")
@@ -446,8 +413,8 @@ def main() -> None:
 
     settings = Settings.from_env()
     if args.cmd == "record-closure":
-        record = {"is_holiday": True, "reason": args.reason, "evidence_url": args.evidence_url}
-        print(record_closure(args.date, settings, {**record, "status": "confirmed_by_human"}))
+        record = {"reason": args.reason, "evidence": args.evidence_url, "status": "recorded_by_hand"}
+        print(record_closure(args.date, settings, record))
         return
     if args.source:
         settings = settings.with_overrides(source=args.source)

@@ -144,9 +144,7 @@ _CA_SCHEMA = {
     "ref_price": pl.Decimal(12, 2),
     "dividend_value": pl.Decimal(16, 6),
     "open_ref_price": pl.Decimal(12, 2),
-    "dividend_ref_price": pl.Decimal(12, 2),
     "adj_factor": pl.Float64,
-    "detail_key": pl.String,
 }
 
 
@@ -155,7 +153,7 @@ def _corporate_action_frame(doc: dict, mapping: dict[str, str], source: str, **c
     if str(doc.get("stat", "")).upper() != "OK" or not doc.get("data"):
         return pl.DataFrame(schema=_CA_SCHEMA)
     raw = _frame(doc["fields"], doc["data"], mapping)
-    optional = ("dividend_value", "dividend_ref_price", "note", "detail_key")
+    optional = ("dividend_value", "note")
     absent = [col for col in optional if col not in raw.columns]
     raw = raw.with_columns(
         pl.col("data_date").map_elements(_roc_to_date, return_dtype=pl.Date).alias("trade_date"),
@@ -173,9 +171,7 @@ def _corporate_action_frame(doc: dict, mapping: dict[str, str], source: str, **c
         _price("ref_price"),
         _num("dividend_value").cast(pl.Decimal(16, 6)).alias("dividend_value"),
         _price("open_ref_price"),
-        _price("dividend_ref_price"),
         (_num("ref_price").cast(pl.Float64) / _num("before_close").cast(pl.Float64)).alias("adj_factor"),
-        _text("detail_key").str.replace_all(r"\s+", ""),
     )
 
 
@@ -192,23 +188,3 @@ def parse_capital_reductions(doc: dict) -> pl.DataFrame:
 def parse_etf_splits(doc: dict) -> pl.DataFrame:
     """TWTCAU ETF splits / reverse splits; trade_date is the day trading resumes."""
     return _corporate_action_frame(doc, c.ETF_SPLIT_FIELDS, "TWTCAU")
-
-
-_LEADING_NUMBER = re.compile(r"-?[\d,]*\.?\d+")
-
-
-def parse_event_terms(doc: dict, mapping: dict[str, str]) -> dict[str, float] | None:
-    """A TWT49UDetail / TWTAVUDetail page ("6.000035 元／股", "950.00000000 股") as numbers.
-    None when the page is unavailable: the formula check then reports 'unknown', not 'wrong'."""
-    if str(doc.get("stat", "")).upper() != "OK" or not doc.get("data"):
-        return None
-    fields = [f.strip() for f in doc["fields"]]
-    missing = [f for f in mapping if f not in fields]
-    if missing:
-        raise SchemaDriftError(f"missing detail fields: {missing}")
-    row = doc["data"][0]
-    terms = {}
-    for field, name in mapping.items():
-        m = _LEADING_NUMBER.search(row[fields.index(field)])
-        terms[name] = float(m.group().replace(",", "")) if m else 0.0
-    return terms

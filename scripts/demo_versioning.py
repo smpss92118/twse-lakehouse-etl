@@ -145,14 +145,6 @@ def cmd_correct(args, settings: Settings) -> None:
         print(f"{label} snapshot {snap.snapshot_id}: volume_shares={v['volume_shares'][0]:,}  run_id={v['run_id'][0]}")
 
 
-def _before_run(tbl, run_id: str) -> int | None:
-    """Newest ancestor not written by run_id, i.e. the table as it was before that run."""
-    head = tbl.current_snapshot()
-    if head is None or head.summary.get("run_id") != run_id:
-        return None  # that run did not change this table (identical content is skipped)
-    return next((s.snapshot_id for s in ancestors_of(head, tbl.metadata) if s.summary.get("run_id") != run_id), None)
-
-
 def cmd_rollback(args, settings: Settings) -> None:
     """Undo the last run everywhere it wrote, Gold included: rolling back Silver alone would leave
     the merged table the strategy team reads on the bad version."""
@@ -167,7 +159,7 @@ def cmd_rollback(args, settings: Settings) -> None:
             raise SystemExit("nothing to roll back")
         run_id = anchor.summary.get("run_id")
         print(f"rolling back run {run_id}")
-        targets = {name: _before_run(iceberg_io.get_table(settings, name), run_id) for name in names}
+        targets = {name: iceberg_io.snapshot_before_run(iceberg_io.get_table(settings, name), run_id) for name in names}
     for name, target in targets.items():
         tbl = iceberg_io.get_table(settings, name)
         if target is None:

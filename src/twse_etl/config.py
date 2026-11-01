@@ -20,7 +20,6 @@ class Settings:
     catalog_uri: str  # SQLAlchemy URI, used when catalog_type == "sql"
     source: str  # "twse" = live HTTP, "fixture" = recorded raw JSON
     fixture_dir: Path
-    vendor_dir: Path  # third-party corporate actions (FinMind JSON export)
     namespace: str = "twse"
 
     @classmethod
@@ -34,7 +33,6 @@ class Settings:
             catalog_uri=os.environ.get("ICEBERG_CATALOG_URI", sqlite_default),
             source=os.environ.get("TWSE_SOURCE", "twse"),
             fixture_dir=Path(os.environ.get("TWSE_FIXTURE_DIR", REPO_ROOT / "fixtures" / "twse")),
-            vendor_dir=Path(os.environ.get("VENDOR_CORP_ACTIONS_DIR", REPO_ROOT / "fixtures" / "vendor")),
         )
 
     def with_overrides(self, **changes) -> Settings:

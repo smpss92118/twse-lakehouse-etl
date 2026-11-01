@@ -1,4 +1,4 @@
-"""End to end on recorded payloads: calendar gate, typhoon fallback, idempotency, corrections."""
+"""End to end on recorded payloads: calendar gate, typhoon closure, idempotency, corrections, undo."""
 
 from __future__ import annotations
 
@@ -9,9 +9,9 @@ from datetime import UTC, date, datetime, timedelta
 import polars as pl
 import pyarrow as pa
 import pytest
-from conftest import FAKE_LLM, FIXTURES, TYPHOON_VERDICT, load_fixture, make_settings
+from conftest import FIXTURES, load_fixture, make_settings
 
-from twse_etl import contracts, iceberg_io, pipeline, storage, transform
+from twse_etl import contracts, gold, iceberg_io, pipeline, sources, storage, transform
 from twse_etl.validate import DataQualityError
 
 DAYS = [date(2026, 10, 22) + timedelta(days=i) for i in range(8)]  # 10-22 .. 10-29
@@ -20,20 +20,24 @@ DAYS = [date(2026, 10, 22) + timedelta(days=i) for i in range(8)]  # 10-22 .. 10
 @pytest.fixture(scope="module")
 def loaded(tmp_path_factory):
     """One backfill shared by the read-only tests below."""
-    mp = pytest.MonkeyPatch()
-    mp.setenv("HOLIDAY_LLM_CMD", FAKE_LLM)
-    mp.setenv("FAKE_LLM_VERDICT", json.dumps(TYPHOON_VERDICT, ensure_ascii=False))
     settings = make_settings(tmp_path_factory.mktemp("lake"))
-    results = {d: pipeline.run_day(d, settings) for d in DAYS}
-    mp.undo()
-    return settings, results
+    return settings, {d: pipeline.run_day(d, settings) for d in DAYS}
+
+
+def _fixtures_with(tmp_path, *files: tuple[str, str]):
+    """Settings whose fixture folder holds only the given (report, file stem) recordings."""
+    fixtures = tmp_path / "fixtures"
+    for report, stem in files:
+        (fixtures / report).mkdir(parents=True, exist_ok=True)
+        shutil.copy(FIXTURES / report / f"{stem}.json.gz", fixtures / report)
+    return make_settings(tmp_path / "lake").with_overrides(fixture_dir=fixtures)
 
 
 def test_backfill_skips_closures_and_loads_trading_days(loaded):
     _, results = loaded
     skipped = {d.isoformat(): r["skipped"] for d, r in results.items() if "skipped" in r}
     assert skipped == {
-        "2026-10-23": TYPHOON_VERDICT["reason"],  # not in the calendar: data wait + LLM
+        "2026-10-23": pipeline.CLOSURE_REASON,  # not in the calendar: data wait + TWSE intraday statistics
         "2026-10-24": "weekend",
         "2026-10-25": "weekend",
         "2026-10-26": "臺灣光復暨金門古寧頭大捷紀念日",  # official calendar
@@ -44,11 +48,12 @@ def test_backfill_skips_closures_and_loads_trading_days(loaded):
             assert all(c["passed"] for c in r["reconcile"])
 
 
-def test_typhoon_closure_is_recorded_for_human_confirmation(loaded):
+def test_typhoon_closure_is_recorded_with_twse_evidence(loaded):
     settings, _ = loaded
     record = json.loads(storage.read_bytes(storage.join(settings.data_uri, "closures", "2026-10-23.json")))
-    assert record["status"] == "pending_human_confirmation"
-    assert record["evidence_url"].startswith("https://")
+    assert record["status"] == "confirmed_by_twse_data"
+    answer = json.loads(storage.read_bytes(record["evidence"]))  # the MI_5MINS response, kept in Bronze
+    assert answer["stat"] == sources.NO_DATA_STAT
 
 
 def test_corporate_actions_land_on_the_day_they_take_effect(loaded):
@@ -63,17 +68,26 @@ def test_corporate_actions_land_on_the_day_they_take_effect(loaded):
 
 def test_contract_columns_are_added_to_a_table_created_by_an_older_release(settings):
     """Schema evolution on deploy: old data files are not rewritten, their rows read the new column as null."""
-    contract = contracts.CORPORATE_ACTIONS_SCHEMA
-    old = pa.schema(list(contract)[: contract.get_field_index("source_report")])  # before adjusted prices
+    contract = contracts.GOLD_SCHEMA
+    old = pa.schema(list(contract)[:-1])  # an older release without the last column
     catalog = iceberg_io.get_catalog(settings)
     catalog.create_namespace_if_not_exists(settings.namespace)
-    tbl = catalog.create_table(f"{settings.namespace}.corporate_actions", schema=old)
-    row = {"trade_date": date(2026, 10, 29), "stock_id": "2330", "run_id": "v1", "source_sha256": "-"}
-    tbl.append(pa.Table.from_pylist([{**row, "ingested_at": datetime(2026, 10, 29, tzinfo=UTC)}], schema=old))
+    tbl = catalog.create_table(f"{settings.namespace}.daily_market_wide", schema=old)
+    row = {
+        "trade_date": date(2026, 10, 29),
+        "stock_id": "2330",
+        "institutional_reported": True,
+        "is_ex_event": False,
+        "quotes_snapshot_id": 1,
+        "institutional_snapshot_id": 1,
+        "run_id": "v1",
+        "built_at": datetime(2026, 10, 29, tzinfo=UTC),
+    }
+    tbl.append(pa.Table.from_pylist([row], schema=old))
 
-    tbl = iceberg_io.get_table(settings, "corporate_actions")
-    assert tbl.schema().column_names == contracts.CORPORATE_ACTIONS_SCHEMA.names
-    assert iceberg_io.read(tbl, date(2026, 10, 29))["source_report"].to_list() == [None]
+    tbl = iceberg_io.get_table(settings, "daily_market_wide")
+    assert tbl.schema().column_names == contract.names
+    assert iceberg_io.read(tbl, date(2026, 10, 29))[contract.names[-1]].to_list() == [None]
 
 
 def test_rerun_same_day_creates_no_snapshot(loaded):
@@ -110,31 +124,19 @@ def test_correction_replaces_day_without_duplicates_and_keeps_old_version(settin
     assert (old_vol, new_vol) == (18_403_916, 12_345_678)
 
 
-@pytest.mark.parametrize(
-    ("verdict", "exit_code"),
-    [
-        ({"is_holiday": False, "reason": "no closure found", "evidence_url": None}, 0),
-        ({"is_holiday": True, "reason": "typhoon", "evidence_url": None}, 0),  # no evidence
-        ("not json", 0),
-        (None, 1),  # LLM unavailable
-    ],
-)
-def test_missing_data_without_evidenced_closure_is_an_anomaly(settings, fake_llm, verdict, exit_code):
-    fake_llm(verdict, exit_code)
+@pytest.mark.parametrize("intraday", [("MI_5MINS", "20261029"), None], ids=["market_traded", "no_clear_answer"])
+def test_no_data_on_a_trading_day_is_an_anomaly_unless_twse_confirms_a_closure(tmp_path, intraday):
+    """Neither report by the cutoff. If TWSE lists intraday trades, or gives no explicit 'no data'
+    (here: a day nobody recorded), the run fails and alerts; it is never skipped as a closure."""
+    settings = _fixtures_with(tmp_path, ("HOLIDAY", "2026"), *([intraday] if intraday else []))
     with pytest.raises(pipeline.MissingDataError):
-        pipeline.run_day(date(2026, 10, 23), settings)
+        pipeline.run_day(date(2026, 10, 29), settings)
+    assert not pipeline.is_closure_recorded(date(2026, 10, 29), settings)
 
 
-def test_late_report_on_an_open_market_is_never_turned_into_a_closure(tmp_path, monkeypatch):
-    """Quotes are out, T86 is not: the LLM must not be asked, whatever it would say."""
-    fixtures = tmp_path / "fixtures"
-    for report, key in (("HOLIDAY", "2026"), ("MI_INDEX", "20261029")):
-        (fixtures / report).mkdir(parents=True)
-        shutil.copy(FIXTURES / report / f"{key}.json.gz", fixtures / report)
-    settings = make_settings(tmp_path / "lake").with_overrides(fixture_dir=fixtures)
-    monkeypatch.setenv("HOLIDAY_LLM_CMD", FAKE_LLM)
-    monkeypatch.setenv("FAKE_LLM_VERDICT", json.dumps(TYPHOON_VERDICT, ensure_ascii=False))
-
+def test_late_report_on_an_open_market_is_never_turned_into_a_closure(tmp_path):
+    """Quotes are out, T86 is not: the market was open, so the closure check is not even asked."""
+    settings = _fixtures_with(tmp_path, ("HOLIDAY", "2026"), ("MI_INDEX", "20261029"))
     with pytest.raises(pipeline.MissingDataError, match="market was open"):
         pipeline.run_day(date(2026, 10, 29), settings)
     assert not pipeline.is_closure_recorded(date(2026, 10, 29), settings)
@@ -176,3 +178,25 @@ def test_audit_failure_leaves_iceberg_untouched(settings):
             "T86": json.dumps(t86, ensure_ascii=False).encode(),
         })  # fmt: skip
     assert iceberg_io.get_table(settings, "daily_quotes").current_snapshot() is None
+
+
+@pytest.mark.parametrize("first_load", [True, False], ids=["first_load", "after_a_good_load"])
+def test_reconcile_failure_undoes_the_run_everywhere(settings, monkeypatch, first_load):
+    """Anomaly scenario 2: every audit passed, then the merged table came out with 800 rows. The run
+    is undone in every table before the task fails, so readers keep the last good version (or, on a
+    first load, nothing), never the short merge. The rerun after the fix loads the day normally."""
+    d = date(2026, 10, 29)
+    if not first_load:
+        pipeline.run_day(d, settings)
+    tables = ("daily_quotes", "institutional_flows", "corporate_actions", "daily_market_wide")
+    before = {name: iceberg_io.read(iceberg_io.get_table(settings, name), d).height for name in tables}
+
+    real_build = gold.build
+    monkeypatch.setattr(gold, "build", lambda *args, **kw: real_build(*args, **kw).head(800))
+    with pytest.raises(DataQualityError, match="gold_rows_equal_quotes"):
+        pipeline.run_day(d, settings, run_id="short-merge")
+    assert {name: iceberg_io.read(iceberg_io.get_table(settings, name), d).height for name in tables} == before
+
+    monkeypatch.setattr(gold, "build", real_build)
+    counts = pipeline.run_day(d, settings)["row_counts"]
+    assert counts["daily_market_wide"] == counts["daily_quotes"] == 1388

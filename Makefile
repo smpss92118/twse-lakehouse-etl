@@ -16,7 +16,7 @@ END ?= $(DATE)
 METHOD ?= backward
 
 .PHONY: help setup env lint test dag-test fixtures deploy deploy-from-ci build up down logs trigger status \
-	demo-snapshots demo-asof demo-correct demo-rollback demo-evolve demo-adjusted review passwords dev-backfill clean \
+	demo-snapshots demo-asof demo-correct demo-rollback demo-evolve demo-adjusted passwords dev-backfill clean \
 	bigdata-up bigdata-down trino-sql sql-ui start stop services
 
 help: ## list targets
@@ -30,8 +30,7 @@ env: ## create .env with fresh local-only secrets (gitignored)
 	  { echo "AIRFLOW_UID=$$(id -u)"; \
 	    echo "AIRFLOW_JWT_SECRET=$$(openssl rand -hex 32)"; \
 	    echo "AIRFLOW_FERNET_KEY=$$(python3 -c 'import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())')"; \
-	    echo "TWSE_SOURCE=twse"; \
-	    echo "# ANTHROPIC_API_KEY=   # enables the LLM unscheduled-closure check"; } > .env; \
+	    echo "TWSE_SOURCE=twse"; } > .env; \
 	  echo "created .env"; fi
 	@grep -q '^CLOUDBEAVER_ADMIN_PASSWORD=' .env || echo "CLOUDBEAVER_ADMIN_PASSWORD=Cb1$$(openssl rand -hex 12)" >> .env
 
@@ -75,12 +74,8 @@ trigger: ## run the DAG for DATE (default 2026-10-29)
 	$(AIRFLOW) airflow dags unpause twse_daily_etl
 	$(AIRFLOW) airflow dags trigger twse_daily_etl --conf '{"trade_date": "$(DATE)"}'
 
-passwords: ## local Airflow logins (admin, trader), generated on first start
+passwords: ## local Airflow login (admin), generated on first start
 	@cat .local/airflow/auth/passwords.json; echo
-
-review: ## ask a person to review a corporate action: STOCK=2762 DATE=2026-10-29 (Airflow UI > Required Actions)
-	$(AIRFLOW) airflow dags trigger twse_corporate_action_review \
-		--conf '{"items": [{"trade_date": "$(DATE)", "stock_id": "$(STOCK)"}]}'
 
 status: ## task states of recent runs
 	$(AIRFLOW) airflow dags list-runs twse_daily_etl

@@ -1,17 +1,16 @@
-"""Record raw TWSE payloads (and third-party corporate actions) as gzip fixtures.
+"""Record raw TWSE payloads as gzip fixtures.
 
 Fixtures are byte-for-byte TWSE responses, so the `fixture` source replays exactly what the live
-API returned. Used by CI (no network) and as the fallback when TWSE rate-limits.
+API returned. Used by CI (no network) and as the fallback when TWSE rate-limits. Files that exist
+are kept; only missing ones are fetched.
 
     uv run python scripts/record_fixtures.py
-    uv run python scripts/record_fixtures.py --vendor-src ../data_center/finmind_data/corporate_actions/source
 """
 
 from __future__ import annotations
 
 import argparse
 import gzip
-import json
 from datetime import date
 from pathlib import Path
 
@@ -34,58 +33,37 @@ EVENT_DATES = [
     "2025-06-18",  # 0050 resumes; not marked X, so close - change = opening reference price
     "2025-06-23",  # 2371 resumes after a capital reduction with a cash refund; marked X
 ]
+# MI_5MINS answers "did the market open?" after the data-wait cutoff: the 10-23 typhoon closure
+# ("no data") and a normal trading day (09:00-13:30 records).
+INTRADAY_DATES = ["2026-10-23", "2026-10-29"]
 HOLIDAY_YEARS = [2024, 2026]
 
 
-def _record(fixture_dir: Path, settings: Settings, report: str, d: date, key: str | None = None) -> dict:
-    path = sources.fixture_path(fixture_dir, report, d, key)
+def _record(fixture_dir: Path, settings: Settings, report: str, d: date) -> None:
+    path = sources.fixture_path(fixture_dir, report, d)
     if path.exists():
-        return json.loads(gzip.decompress(path.read_bytes()))
-    payload = sources.fetch(report, d, settings, key=key)
+        return
+    payload = sources.fetch(report, d, settings)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(gzip.compress(payload.body, mtime=0))
-    print(f"{report:13s} {key or d}  stat={payload.json().get('stat')!r:12}  {len(payload.body):>8} bytes")
-    return payload.json()
+    print(f"{report:9s} {d}  stat={payload.json().get('stat')!r:12}  {len(payload.body):>8} bytes")
 
 
 def record_twse(fixture_dir: Path) -> None:
     settings = Settings.from_env().with_overrides(source="twse")
     jobs = [(r, d) for d in TRADE_DATES for r in ("MI_INDEX", "T86", *sources.RANGE_REPORTS)]
     jobs += [(r, d) for d in EVENT_DATES for r in ("MI_INDEX", *sources.RANGE_REPORTS)]
+    jobs += [("MI_5MINS", d) for d in INTRADAY_DATES]
     for report, d in jobs:
-        doc = _record(fixture_dir, settings, report, date.fromisoformat(d))
-        if report in sources.DETAIL_REPORTS:
-            for key in sources.detail_keys(doc):
-                _record(fixture_dir, settings, sources.DETAIL_REPORTS[report], date.fromisoformat(d), key)
+        _record(fixture_dir, settings, report, date.fromisoformat(d))
     for year in HOLIDAY_YEARS:
         _record(fixture_dir, settings, "HOLIDAY", date(year, 1, 1))
-
-
-def record_vendor(vendor_src: Path, vendor_dir: Path) -> None:
-    """Keep only fixture-date rows from a FinMind TaiwanStockDividendResult export."""
-    wanted = set(TRADE_DATES)
-    rows: dict[tuple[str, str], dict] = {}
-    for f in sorted(vendor_src.glob("TaiwanStockDividendResult_*.json")):
-        for row in json.loads(f.read_text()).get("data", []):
-            if row.get("date") in wanted:
-                rows[(row["date"], row["stock_id"])] = row
-    vendor_dir.mkdir(parents=True, exist_ok=True)
-    out = vendor_dir / "TaiwanStockDividendResult_fixture.json"
-    data = sorted(rows.values(), key=lambda r: (r["date"], r["stock_id"]))
-    doc = {"msg": "fixture subset of FinMind TaiwanStockDividendResult", "data": data}
-    out.write_text(json.dumps(doc, ensure_ascii=False, indent=1))
-    print(f"vendor rows: {len(rows)} -> {out}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fixture-dir", type=Path, default=REPO_ROOT / "fixtures" / "twse")
-    parser.add_argument("--vendor-src", type=Path, help="FinMind export dir (optional)")
-    parser.add_argument("--vendor-dir", type=Path, default=REPO_ROOT / "fixtures" / "vendor")
-    args = parser.parse_args()
-    record_twse(args.fixture_dir)
-    if args.vendor_src:
-        record_vendor(args.vendor_src, args.vendor_dir)
+    record_twse(parser.parse_args().fixture_dir)
 
 
 if __name__ == "__main__":
