@@ -1,0 +1,1184 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>台股管線面試手冊</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: study handbook. Sticky table of contents on the left, one 46em reading column on the right;
+   comparison tables scroll inside their own frame; Q&A answers fold so the page doubles as a self-test. */
+:root {
+  --paper: #f5f7f9;
+  --sheet: #ffffff;
+  --ink: #14202b;
+  --muted: #566573;
+  --line: #d8dfe6;
+  --accent: #1c4f8c;
+  --accent-soft: #e6eef8;
+  --up: #c4313a;
+  --down: #17804a;
+  --warn: #a8661a;
+  --warn-soft: #fbf1e4;
+  --font-display: "Noto Serif TC", "Songti TC", serif;
+  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e151c; --sheet: #151f29; --ink: #e5ecf2; --muted: #94a3b1; --line: #263441;
+    --accent: #82b2ea; --accent-soft: #18293b; --up: #f0686f; --down: #4cc483;
+    --warn: #e2a654; --warn-soft: #2a2117; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e151c; --sheet: #151f29; --ink: #e5ecf2; --muted: #94a3b1; --line: #263441;
+  --accent: #82b2ea; --accent-soft: #18293b; --up: #f0686f; --down: #4cc483;
+  --warn: #e2a654; --warn-soft: #2a2117; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.8;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+h1, h2, h3, h4 { font-family: var(--font-display); text-wrap: balance; line-height: 1.35; margin: 0; }
+p, ul, ol { margin: 0; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code, .mono, .num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+code { font-size: 0.84em; background: var(--accent-soft); padding: 0.08em 0.38em; border-radius: 4px; overflow-wrap: anywhere; }
+pre { font-family: var(--font-data); font-size: 13px; line-height: 1.6; background: var(--sheet); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; overflow-x: auto; margin: 0; }
+pre code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+
+.layout { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 48px; padding-block: 40px 80px; }
+aside.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; max-height: calc(100vh - 40px); overflow-y: auto; font-size: 14px; }
+aside.toc .label { font-size: 12px; letter-spacing: 0.12em; color: var(--muted); }
+aside.toc ol { list-style: none; padding: 0; margin-top: 10px; display: grid; gap: 2px; }
+aside.toc a { display: grid; grid-template-columns: 2.2em 1fr; text-decoration: none; color: var(--muted); padding: 3px 0; }
+aside.toc a:hover { color: var(--accent); }
+aside.toc a span:first-child { font-family: var(--font-data); font-size: 12px; padding-top: 2px; }
+details.toc-mobile { display: none; }
+
+main { min-width: 0; max-width: 50em; }
+.hero { padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+.eyebrow { font-size: 13px; letter-spacing: 0.12em; color: var(--muted); }
+.hero h1 { font-size: clamp(30px, 4.4vw, 42px); font-weight: 900; margin-top: 8px; }
+.hero p { margin-top: 14px; color: var(--muted); }
+.hero .links { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 14px; }
+
+section { padding-block: 40px 8px; scroll-margin-top: 16px; }
+section > h2 { font-size: clamp(23px, 3vw, 29px); display: flex; gap: 12px; align-items: baseline; }
+section > h2 .n { font-family: var(--font-data); font-size: 14px; color: var(--accent); font-weight: 600; }
+section > .lede { margin-top: 10px; color: var(--muted); }
+h3 { font-size: 19px; margin-top: 30px; }
+h4 { font-size: 16px; margin-top: 20px; font-family: var(--font-body); font-weight: 700; }
+section p + p, section p + ul, section ul + p, section pre + p, section p + pre { margin-top: 12px; }
+section ul, section ol { padding-left: 1.2em; display: grid; gap: 6px; }
+section h3 + p, section h3 + ul, section h4 + p, section h4 + ul, section h3 + pre, section h3 + .table-wrap, section h4 + .table-wrap { margin-top: 10px; }
+.table-wrap + p, .table-wrap + ul, .table-wrap + h4, pre + ul, pre + h4, .note + h3, .note + h4 { margin-top: 16px; }
+
+.table-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--sheet); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.6; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+th { font-size: 13px; color: var(--muted); font-weight: 500; background: var(--paper); white-space: nowrap; }
+table.wide { min-width: 680px; }
+td.ok { color: var(--down); white-space: nowrap; font-weight: 700; }
+td.warn { color: var(--warn); white-space: nowrap; font-weight: 700; }
+td.block { color: var(--up); white-space: nowrap; }
+td.soft { color: var(--muted); white-space: nowrap; }
+tr.ours td { background: var(--accent-soft); }
+
+.note { margin-top: 16px; border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 6px 6px 0; font-size: 15px; }
+.note.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+.note b:first-child { display: block; margin-bottom: 2px; }
+
+.layers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+.layer { background: var(--sheet); border: 1px solid var(--line); border-radius: 6px; padding: 12px; min-width: 0; font-size: 14px; line-height: 1.6; }
+.layer b { display: block; font-size: 15px; }
+.layer .what { color: var(--muted); margin-top: 4px; }
+.layer code { font-size: 12px; }
+.layer.gate { border-color: var(--accent); background: var(--accent-soft); }
+
+/* Q&A */
+.qa-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 14px; }
+button.tool { font: inherit; font-size: 14px; color: var(--accent); background: var(--sheet); border: 1px solid var(--accent); border-radius: 999px; padding: 4px 14px; cursor: pointer; }
+button.tool:hover { background: var(--accent-soft); }
+.qa-group { margin-top: 26px; }
+.qa-group > h3 { margin-top: 0; font-size: 17px; color: var(--muted); font-family: var(--font-body); font-weight: 700; letter-spacing: 0.04em; }
+details.qa { border-bottom: 1px solid var(--line); }
+details.qa summary { cursor: pointer; padding: 12px 0; display: grid; grid-template-columns: 2.6em 1fr; gap: 6px; font-weight: 500; list-style: none; }
+details.qa summary::-webkit-details-marker { display: none; }
+details.qa summary .q { font-family: var(--font-data); font-size: 13px; color: var(--accent); padding-top: 3px; }
+details.qa summary:hover { color: var(--accent); }
+details.qa[open] summary { color: var(--accent); }
+details.qa .ans { padding: 0 0 16px 2.6em; display: grid; gap: 10px; font-size: 15.5px; }
+details.qa .ans .say { background: var(--sheet); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; }
+details.qa .ans .say::before { content: "建議回答"; display: block; font-size: 12px; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 4px; }
+details.qa .ans .why { color: var(--muted); font-size: 14.5px; }
+details.qa .ans .why::before { content: "講解　"; color: var(--accent); font-weight: 700; }
+
+dl.gloss { display: grid; gap: 0; margin-top: 14px; }
+dl.gloss div { display: grid; grid-template-columns: 11em 1fr; gap: 12px; border-bottom: 1px solid var(--line); padding: 8px 0; }
+dl.gloss dt { font-weight: 700; font-family: var(--font-data); font-size: 14px; }
+dl.gloss dd { margin: 0; color: var(--muted); font-size: 15px; }
+
+@media (max-width: 960px) {
+  .layout { grid-template-columns: 1fr; gap: 0; padding-block: 24px 64px; }
+  aside.toc { display: none; }
+  details.toc-mobile { display: block; margin-top: 18px; border: 1px solid var(--line); border-radius: 6px; background: var(--sheet); padding: 6px 14px; }
+  details.toc-mobile summary { cursor: pointer; color: var(--muted); font-size: 14px; padding: 4px 0; }
+  details.toc-mobile ol { padding-left: 1.4em; margin: 6px 0 8px; font-size: 14.5px; display: grid; gap: 2px; }
+  .layers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 480px) {
+  .layers { grid-template-columns: 1fr; }
+  details.qa .ans { padding-left: 0; }
+  dl.gloss div { grid-template-columns: 1fr; gap: 2px; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<div class="layout">
+<aside class="toc" aria-label="目錄">
+  <p class="label">目錄</p>
+  <ol>
+    <li><a href="#brief"><span>00</span><span>題目逐項清單</span></a></li>
+    <li><a href="#arch"><span>01</span><span>全貌：分層與寫入流程</span></a></li>
+    <li><a href="#dag"><span>02</span><span>Airflow DAG 設計</span></a></li>
+    <li><a href="#clean"><span>03</span><span>擷取與清洗</span></a></li>
+    <li><a href="#quality"><span>04</span><span>資料品質把關</span></a></li>
+    <li><a href="#iceberg"><span>05</span><span>Iceberg 與版本</span></a></li>
+    <li><a href="#gold"><span>06</span><span>合併表</span></a></li>
+    <li><a href="#adjusted"><span>07</span><span>還原權值</span></a></li>
+    <li><a href="#closure"><span>08</span><span>臨時休市</span></a></li>
+    <li><a href="#deploy"><span>09</span><span>CI/CD 與搬上 AWS</span></a></li>
+    <li><a href="#scale"><span>10</span><span>大資料配置與查詢</span></a></li>
+    <li><a href="#compute"><span>11</span><span>GPU 訓練與運算引擎</span></a></li>
+    <li><a href="#limits"><span>12</span><span>已知限制與改進</span></a></li>
+    <li><a href="#qa"><span>13</span><span>面試問答</span></a></li>
+    <li><a href="#gloss"><span>14</span><span>名詞表</span></a></li>
+  </ol>
+</aside>
+
+<main>
+<header class="hero">
+  <p class="eyebrow">資料工程師（ETL）實作題　·　深度解說</p>
+  <h1>台股管線面試手冊</h1>
+  <p>這份手冊對照題目逐項說明：每個技術環節怎麼做、為什麼這樣做、還有哪些替代方案，以及現場可能被追問的問題和建議回答。所有數字都來自實際執行留下的檔案（manifest、測試、benchmark 結果檔、GitHub Actions run），程式碼位置都標在旁邊，被問到時可以直接打開給對方看。</p>
+  <div class="links">
+    <a href="https://github.com/smpss92118/twse-lakehouse-etl">GitHub repo</a>
+    <a href="https://claude.ai/artifact/11i6BhdoiC9zL5HCcwQVvn">報告版（發表用）</a>
+  </div>
+  <details class="toc-mobile">
+    <summary>目錄</summary>
+    <ol start="0">
+      <li><a href="#brief">題目逐項清單</a></li>
+      <li><a href="#arch">全貌：分層與寫入流程</a></li>
+      <li><a href="#dag">Airflow DAG 設計</a></li>
+      <li><a href="#clean">擷取與清洗</a></li>
+      <li><a href="#quality">資料品質把關</a></li>
+      <li><a href="#iceberg">Iceberg 與版本</a></li>
+      <li><a href="#gold">合併表</a></li>
+      <li><a href="#adjusted">還原權值</a></li>
+      <li><a href="#closure">臨時休市</a></li>
+      <li><a href="#deploy">CI/CD 與搬上 AWS</a></li>
+      <li><a href="#scale">大資料配置與查詢</a></li>
+      <li><a href="#compute">GPU 訓練與運算引擎</a></li>
+      <li><a href="#limits">已知限制與改進</a></li>
+      <li><a href="#qa">面試問答</a></li>
+      <li><a href="#gloss">名詞表</a></li>
+    </ol>
+  </details>
+</header>
+
+<!-- BRIEF -->
+<section id="brief">
+  <h2><span class="n">00</span>題目逐項清單</h2>
+  <p class="lede">重讀題目後，你要「回答」的是第一部分的三個問題、第三部分的一個異常情境、第四頁的落地計畫；要「交付」的是 repo、README、4 頁簡報和現場操作。下表把每一項對到它的答案或實作位置。</p>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>題目要求</th><th>答案或實作在哪裡</th><th>狀態</th></tr></thead>
+      <tbody>
+        <tr><td><b>規劃</b>：流程圖（資料流＋部署流）</td><td>報告第 1 頁；README 開頭兩張圖</td><td class="ok">完成</td></tr>
+        <tr><td><b>規劃 Q1</b>：task 怎麼切、交易日曆、延遲怎麼等、何時放棄告警</td><td>報告第 2 頁；本手冊 <a href="#dag">02</a></td><td class="ok">完成</td></tr>
+        <tr><td><b>規劃 Q2</b>：為什麼 Iceberg、partition、重抓不重複又留兩版</td><td>報告第 2 頁；本手冊 <a href="#iceberg">05</a></td><td class="ok">完成</td></tr>
+        <tr><td><b>規劃 Q3</b>：CI 查什麼、CD 怎麼送、搬 AWS 改哪裡</td><td>報告第 2 頁；本手冊 <a href="#deploy">09</a>；README §5</td><td class="ok">完成</td></tr>
+        <tr><td><b>實作 1</b>：DAG 七步驟、失敗重試、用盡告警、休市略過不算失敗</td><td><code>dags/twse_daily_etl.py</code></td><td class="ok">完成</td></tr>
+        <tr><td><b>實作 2</b>：snapshot 清單、time travel、模擬修正（必做三項）</td><td><code>make demo-snapshots / demo-asof / demo-correct</code></td><td class="ok">完成</td></tr>
+        <tr><td><b>實作 2</b>：rollback、schema evolution（選做兩項）</td><td><code>make demo-rollback / demo-evolve</code></td><td class="ok">完成</td></tr>
+        <tr><td><b>實作 3</b>：CI 兩個 job 綠燈＋run 連結</td><td>README §9；<code>.github/workflows/ci.yml</code></td><td class="ok">完成</td></tr>
+        <tr><td><b>實作 3</b>：commit 歷史看得出「改 DAG → push → CI → merge → CD」</td><td>PR #1（加 <code>dagrun_timeout</code>）＋ merge 後的 CI → CD run</td><td class="ok">完成</td></tr>
+        <tr><td><b>實作 4</b>：README 寫啟動、觸發、示範、測試、假設與取捨</td><td>README §1–§8</td><td class="ok">完成</td></tr>
+        <tr><td><b>異常處理</b>（三選一，1 頁）：止血、找原因、預防</td><td>選情境二（對帳失敗自動撤銷）；報告第 3 頁；本手冊 <a href="#quality">04</a></td><td class="ok">完成</td></tr>
+        <tr><td><b>簡報</b> 4 頁：流程圖、設計決策、異常處理、落地計畫</td><td>報告版 HTML 依同樣順序編排</td><td class="ok">完成</td></tr>
+        <tr><td><b>繳交格式</b>：投影片檔（PowerPoint 或 Google Slides）</td><td>題目指定格式。HTML 適合發表，繳交時另附既有投影片匯出的 .pptx</td><td class="warn">注意</td></tr>
+        <tr><td><b>延伸</b>：還原權值（調整價）、GPU 時代的引擎選擇</td><td>本手冊 <a href="#adjusted">07</a>、<a href="#compute">11</a></td><td class="ok">完成</td></tr>
+        <tr><td><b>作答原則</b>：本機完成、無金鑰、資料源說明、列假設、提出可改進處</td><td>README §1、§8（「對題目我會做得不一樣的地方」）</td><td class="ok">完成</td></tr>
+        <tr><td><b>現場</b>：面試官指定一項版本示範，當場執行並解說</td><td>報告「現場操作」；本手冊 <a href="#iceberg">05</a> 的輸出解讀</td><td class="ok">準備好</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note warn"><b>題目的評分重點</b>題目明講看的是「程式結構、資料正確性的把關、版本控制的理解、自動化流程是否真的能運作，不是功能多寡」，而且「現場會針對每個設計決策追問」。所以準備的重心是：每個決定都說得出理由和替代方案。這正是 <a href="#qa">13 面試問答</a>的用途。</div>
+</section>
+
+<!-- ARCH -->
+<section id="arch">
+  <h2><span class="n">01</span>全貌：分層與寫入流程</h2>
+  <p class="lede">資料分四層。每一層有明確的責任，壞掉時知道從哪一層重建。</p>
+  <div class="layers">
+    <div class="layer"><b>Bronze 原始層</b><p class="what">證交所回應原樣存檔，附 sha256 與抓取時間。只增不改。</p><code>bronze/&lt;report&gt;/trade_date=D/</code></div>
+    <div class="layer"><b>Staging 暫存層</b><p class="what">清洗後的 parquet，型別正確。它是「被稽核的對象」，不對外。</p><code>staging/&lt;report&gt;/trade_date=D/</code></div>
+    <div class="layer gate"><b>Silver 正式層</b><p class="what">三張 Iceberg 表：行情、法人、公司行動。稽核全過才寫入。</p><code>daily_quotes 等</code></div>
+    <div class="layer gate"><b>Gold 合併層</b><p class="what">一檔一列的合併表，策略團隊只看這張。</p><code>daily_market_wide</code></div>
+  </div>
+
+  <h3>Write-Audit-Publish（先稽核再發布）</h3>
+  <p>題目的順序是「寫入 Iceberg → 產出合併表 → 筆數檢查」。我改成先把資料寫到 staging（Write），在 staging 上跑完全部稽核（Audit），全部通過才寫進 Iceberg（Publish）。差別在於：檢查失敗時，正式表完全沒被碰過，不需要 rollback，策略團隊也不會在中間讀到壞資料。寫入後仍有一次對帳，確認實際 commit 進去的筆數；對不上就自動撤銷這次寫入（Gold 先、Silver 後），再失敗告警。</p>
+  <pre><code>check_trading_day ─> wait_for_reports ─> route ─┬─> extract_{quotes,institutional,corporate_actions}
+                                                │     ─> stage_* ─> audit ─> publish_silver ─> build_gold ─> reconcile（對不上 → 撤銷本次寫入）
+                                                └─> check_unscheduled_closure（兩份都 0 筆 → 問 MI_5MINS）</code></pre>
+  <p>每次執行最後寫一份 manifest（執行收據）：用了哪些 snapshot id、各表筆數、每一項檢查的結果。策略團隊引用資料時只要引用 snapshot id，就能精確重現。</p>
+  <div class="note"><b>為什麼多抓公司行動表（TWT49U、TWTAUU、TWTCAU）</b>題目只要兩張表，但「昨收 − 漲跌 = 今收」這條最強的檢查，遇到除權息、減資、分割都會失效（漲跌改以開盤競價基準計算）；策略團隊算報酬也需要調整因子。所以留下公司行動，但只用證交所公布的參考價，不另外重算、不接第三方（見 <a href="#adjusted">07</a>）。</div>
+</section>
+
+<!-- DAG -->
+<section id="dag">
+  <h2><span class="n">02</span>Airflow DAG 設計</h2>
+  <p class="lede">對應題目 Q1。程式在 <code>dags/twse_daily_etl.py</code>，業務邏輯全部在 <code>src/twse_etl/</code>，DAG 只負責編排。</p>
+
+  <h3>Task 怎麼切</h3>
+  <p>切分原則是「一個 task 做一件可以單獨重跑的事」，而且失敗類型不同的步驟要分開，才能給不同的重試策略：</p>
+  <ul>
+    <li><b>判斷交易日</b>用 <code>@task.short_circuit</code>：回傳 False 時下游全部 skipped，整個 run 是綠燈。題目要求「休市日主動略過，不是失敗」就靠這個。</li>
+    <li><b>等資料</b>用 sensor；<b>分流</b>用 <code>@task.branch</code>：資料到了走擷取，19:00 還沒到就走「查是否臨時休市」。</li>
+    <li><b>擷取</b>三張表各自一個 task，平行執行，網路錯誤各自重試。</li>
+    <li><b>清洗、稽核、寫入、合併、對帳</b>各自一個 task。task 之間只傳檔案位置、筆數、版本號這類小東西，資料本身不經過 XCom（避免把 metadata DB 塞爆）。</li>
+  </ul>
+
+  <h3>排程設定</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>設定</th><th>值</th><th>理由</th></tr></thead>
+      <tbody>
+        <tr><td>timetable</td><td><code>CronTriggerTimetable("30 15 * * 1-5", Asia/Taipei)</code></td><td>15:30 觸發、處理的就是當天。舊的 data-interval 語意會在「下一個區間」才跑，容易讓人搞錯日期。</td></tr>
+        <tr><td><code>catchup</code></td><td>False</td><td>補資料用明確的 backfill 指令，不讓排程器自動補一堆舊日期。</td></tr>
+        <tr><td><code>max_active_runs</code></td><td>1</td><td>價格連續性檢查要讀「前一個交易日」的 Silver，所以日子必須照順序寫入。</td></tr>
+        <tr><td><code>dagrun_timeout</code></td><td>8 小時</td><td>只允許一個 run 同時跑，卡住的 run 會擋住隔天；先讓它失敗並告警（PR #1 加的）。</td></tr>
+        <tr><td><code>on_failure_callback</code></td><td>task 層＋DAG 層</td><td>task 重試用盡會告警；整個 run 逾時這種 task 不會回報的失敗，由 DAG 層告警。</td></tr>
+        <tr><td>手動指定日期</td><td><code>{"trade_date": "2026-10-29"}</code></td><td>補跑、重抓修正資料都用同一個 DAG，不另寫腳本。</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>交易日曆：三道關</h3>
+  <ol>
+    <li><b>排程只排週一到五</b>（cron 的 <code>1-5</code>）。</li>
+    <li><b>官方開休市表</b>（證交所 holidaySchedule）。實作時發現這張表裡也列了交易日，例如「國曆新年開始交易日」「農曆春節前最後交易日」，整張當休市表會漏跑，所以解析時要排除這些列（<code>trading_calendar.py</code>，有測試）。</li>
+    <li><b>臨時休市</b>：颱風假永遠不會出現在官方表上。只能從「該有資料卻沒有」反推，再問證交所自己的盤中統計 MI_5MINS 確認（見 <a href="#closure">08</a>）。</li>
+  </ol>
+
+  <h3>資料延遲：怎麼等、何時放棄</h3>
+  <ul>
+    <li>sensor 每 600 秒檢查一次，使用 <code>mode="reschedule"</code>：兩次檢查之間釋放 worker slot，不會佔著資源等好幾個小時。</li>
+    <li>「資料到了」的定義不是「API 有回應」，而是 <code>stat == OK</code>、日期等於要求的那天、筆數達到下限（行情 ≥ 900、法人 ≥ 500）。這防止把空表或只發布一半的資料寫進去。</li>
+    <li>17:00 起每次檢查都告警（兩張表正常約 16:30 前發布）；19:00 cutoff 放棄等待：只出了一份，代表市場有開、只是晚，直接失敗告警；兩份都 0 筆，才去查是否臨時休市。</li>
+  </ul>
+
+  <h3>重試與告警</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>步驟</th><th>重試</th><th>為什麼</th></tr></thead>
+      <tbody>
+        <tr><td>extract_*</td><td>3 次，指數退避，從 2 分鐘起</td><td>網路錯誤、證交所暫時限流，等一下通常會好。</td></tr>
+        <tr><td>其他預設</td><td>2 次，間隔 5 分鐘</td><td>暫時性錯誤（例如 catalog 鎖）。</td></tr>
+        <tr><td>audit、reconcile、check_unscheduled_closure</td><td>0 次</td><td>資料錯了，重跑一百次結果都一樣。</td></tr>
+        <tr><td>資料類錯誤（稽核失敗、欄位漂移、確認缺資料）</td><td>轉成 <code>AirflowFailException</code>，直接跳過剩餘重試</td><td>立刻告警交給人處理，不浪費時間、不重複打證交所。</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>告警目前是 <code>ALERT &lt;event&gt; {json}</code> 的 log 行，集中在 <code>twse_etl/alerts.py</code> 的一個函式，換成 Slack 或 SNS 只改這一處。</p>
+
+  <h3>同類工具比較</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>工具</th><th>優勢</th><th>劣勢</th><th>這題適合嗎</th></tr></thead>
+      <tbody>
+        <tr class="ours"><td><b>Airflow</b>（採用）</td><td>業界標準、生態最大、AWS 有託管（MWAA）、sensor／branch／重試都內建</td><td>本機要起 Postgres＋多個服務；DAG 是「task」導向，不是「資料」導向</td><td>題目指定；團隊招人也最容易</td></tr>
+        <tr><td>Dagster</td><td>以資料資產（asset）為中心，每日 partition 和資料血緣是一等公民</td><td>生態與託管選擇較少；概念要重新學</td><td>很適合「每天一個 partition」的資料；中型團隊可考慮</td></tr>
+        <tr><td>Prefect</td><td>純 Python、上手快、動態流程方便</td><td>排程與重試語意和 Airflow 不同，大型團隊案例較少</td><td>可以，但沒有明顯優勢</td></tr>
+        <tr><td>cron＋腳本</td><td>最簡單</td><td>沒有重試、等待、告警、執行紀錄，也無法回答「哪一天跑失敗了」</td><td>就是現在「手動下載」的進化版，不夠</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h4>sensor 的三種模式</h4>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>模式</th><th>行為</th><th>取捨</th></tr></thead>
+      <tbody>
+        <tr><td>poke</td><td>一直佔著 worker slot，在裡面 sleep</td><td>最簡單，但等 3 小時就佔 3 小時</td></tr>
+        <tr class="ours"><td><b>reschedule</b>（採用）</td><td>每次檢查完就釋放 slot，時間到再排進來</td><td>一天一個 DAG，最划算；每次檢查有排程延遲（幾秒）</td></tr>
+        <tr><td>deferrable</td><td>交給 triggerer 用 async 等待</td><td>大量 sensor 時最省資源，但要多跑 triggerer、寫 async 程式</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- CLEAN -->
+<section id="clean">
+  <h2><span class="n">03</span>擷取與清洗</h2>
+  <p class="lede">題目要求「欄位名稱統一為英文，日期、數值型別正確，千分位與正負號符號要處理乾淨」。程式在 <code>sources.py</code>、<code>transform.py</code>、<code>contracts.py</code>。</p>
+
+  <h3>資料源</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>報表</th><th>內容</th><th>備註</th></tr></thead>
+      <tbody>
+        <tr><td>MI_INDEX（type=ALLBUT0999）</td><td>每日收盤行情，約 1,390 檔</td><td>含 ETF、特別股、ETN；不含權證、牛熊證</td></tr>
+        <tr><td>T86（ALLBUT0999）</td><td>三大法人買賣超，約 1,340 檔</td><td>只列當天有法人交易的股票，所以永遠比行情少</td></tr>
+        <tr><td>TWT49U</td><td>除權除息計算結果：前收、參考價、權值+息值</td><td>抓「前一個交易日之後到今天」的區間，不只當天</td></tr>
+        <tr><td>TWTAUU</td><td>減資恢復買賣的前收與參考價</td><td>同上</td></tr>
+        <tr><td>TWTCAU</td><td>ETF 分割／反分割恢復買賣的前收與參考價</td><td>同上</td></tr>
+        <tr><td>holidaySchedule</td><td>官方開休市表</td><td>交易日判斷用</td></tr>
+        <tr><td>MI_5MINS</td><td>每 5 秒委託成交統計（盤中）</td><td>只在 19:00 兩份報表都 0 筆時抓，確認臨時休市</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>每次請求間隔 3 秒，避免被證交所封鎖。測試用的 <code>fixtures/</code> 是證交所原始回應的逐位元組錄製，CI 不連網；被限流時設 <code>TWSE_SOURCE=fixture</code> 就能離線跑完整流程。題目允許「用自己下載的檔案模擬」，README 有說明。</p>
+
+  <h3>清洗規則</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>原始樣子</th><th>處理</th><th>理由</th></tr></thead>
+      <tbody>
+        <tr><td><code>證券代號</code>、<code>收盤價</code>……</td><td>對照表轉成 <code>stock_id</code>、<code>close</code></td><td>對照表集中在 <code>contracts.py</code>，是「資料契約」</td></tr>
+        <tr><td><code>18,403,916</code></td><td>去千分位 → <code>int64</code></td><td>股數、金額不能有小數誤差</td></tr>
+        <tr><td><code>1,045.00</code></td><td>→ <code>decimal(12,2)</code></td><td>float 存不準 0.1；連續性檢查要「完全相等」</td></tr>
+        <tr><td><code>--</code>、空字串、<code>N/A</code></td><td>→ null</td><td>沒有成交不是 0 元</td></tr>
+        <tr><td>漲跌符號是 HTML：<code>&lt;p style=color:red&gt;+&lt;/p&gt;</code></td><td>去標籤，只留 <code>+ - 0 X</code></td><td>正負號和漲跌值分開欄位，要合起來看</td></tr>
+        <tr><td>符號 <code>X</code>（不比價），漲跌印 <code>0.00</code></td><td>漲跌存 null</td><td>存 0 會讓策略以為「平盤」</td></tr>
+        <tr><td>本益比 <code>0.00</code></td><td>→ null</td><td>證交所用 0.00 表示「無本益比」</td></tr>
+        <tr><td><code>0050</code></td><td>股票代號一律字串</td><td>當數字會變 50，join 就對不上</td></tr>
+        <tr><td>民國日期 <code>115年10月29日</code></td><td>→ ISO 日期</td><td>統一型別</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>欄位漂移（schema drift）</h3>
+  <p>證交所改欄位名或少欄位時，<code>SchemaDriftError</code> 讓這天直接失敗（不重試，要人看）。多出新欄位時只告警，照常處理既有欄位。這樣「證交所悄悄改格式」不會變成「某欄安靜地全變 null」。</p>
+
+  <h3>同類工具比較：清洗用什麼</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>工具</th><th>優勢</th><th>劣勢</th></tr></thead>
+      <tbody>
+        <tr class="ours"><td><b>Polars</b>（採用）</td><td>型別嚴格（Decimal、Int64 不會偷偷變 float）、快、語法清楚、零依賴 JVM</td><td>團隊熟悉度可能不如 pandas</td></tr>
+        <tr><td>pandas</td><td>最多人會</td><td>整數欄有 null 會變 float；Decimal 支援弱</td></tr>
+        <tr><td>Spark</td><td>真正的分散式運算</td><td>一天 1,400 列用 Spark 是殺雞用牛刀，啟動就要數十秒</td></tr>
+        <tr><td>DuckDB</td><td>SQL、快，能直接讀 S3 上的 parquet</td><td>清洗規則用 SQL 寫較難單元測試；它的 Iceberg extension 接不到本專案的 SQL catalog</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- QUALITY -->
+<section id="quality">
+  <h2><span class="n">04</span>資料品質把關</h2>
+  <p class="lede">寫入前 24 項檢查（22 項擋寫入、2 項只告警），寫入後 4 項對帳，對不上就自動撤銷這次寫入。測試用真實的 10-29 資料全過，再逐一注入 25 種壞資料，每種都要讓對應的檢查失敗。</p>
+
+  <h3>寫入前 24 項</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>類別</th><th>檢查</th><th>項數</th><th>不過時</th></tr></thead>
+      <tbody>
+        <tr><td>前一交易日</td><td>依行事曆與已記錄的休市，前一個交易日必須已載入；缺了就要求先補，不拿更早的收盤比</td><td class="num">1</td><td class="block">擋</td></tr>
+        <tr><td>行情</td><td>筆數 ≥ 900；日期等於當天；代號唯一非空；low ≤ open、close ≤ high；有收盤價就要有成交量；漲跌符號 ∈ {+,−,0,X}；符號與漲跌值同號</td><td class="num">7</td><td class="block">擋</td></tr>
+        <tr><td>連續性</td><td>今收 − 漲跌 = 昨收（有除權息、減資、分割時改用開盤競價基準）</td><td class="num">1</td><td class="block">擋</td></tr>
+        <tr><td>法人</td><td>筆數 ≥ 500；日期；代號唯一；五組「買 − 賣 = 買賣超」；自營商 = 自行 + 避險；合計 = 四者相加</td><td class="num">10</td><td class="block">擋</td></tr>
+        <tr><td>跨表</td><td>法人表的代號都在行情表；法人涵蓋率 ≥ 85%</td><td class="num">2</td><td class="block">擋</td></tr>
+        <tr><td>公司行動</td><td>調整因子範圍：除權息 (0, 1]、減資與分割 (0, 100]</td><td class="num">1</td><td class="block">擋</td></tr>
+        <tr><td>公司行動</td><td>TWT49U 同一列：前收 − 權值+息值，捨去到分 = 參考價；事件前收盤 = 我們 Silver 的前一日收盤</td><td class="num">2</td><td class="soft">只告警</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>最強的一條：價格連續性</h3>
+  <p>每一檔都要滿足 <code>今日收盤 − 有號漲跌 = 前一交易日收盤</code>。它抓得到「筆數對、價格錯」的問題，例如欄位錯位、小數點位移、漲跌號解析錯，這些筆數檢查完全抓不到。真實資料每天約 1,360 檔參與檢查，0 筆不符。</p>
+  <p>例外處理：</p>
+  <ul>
+    <li><b>X（不比價）</b>：證交所自己說不可比，排除。</li>
+    <li><b>除權息、減資、分割後</b>：漲跌的基準是「開盤競價基準」，不是昨收，改用事件表的 <code>open_ref_price</code>。0050 在 2025-06-18 以 1 拆 4 恢復交易，47.57 − 0.41 = 47.16，正是參考價；停牌期間沒有昨收，靠事件表才檢查得到。</li>
+    <li><b>颱風日的除權息</b>：2026-10-23 颱風休市，但 TWT49U 仍列出當天除息的 2028、6931，在下一個交易日 10-27 生效，而且行情不標 X。只看「當天」的事件會誤報，所以事件抓「前一個交易日之後到今天」的區間。這是用真實資料才發現的。</li>
+    <li>新上市、前一天沒收盤價的股票自然排除（沒有比較基準）。</li>
+  </ul>
+
+  <h3>門檻怎麼定</h3>
+  <p>900／500／85% 是「底線」，不是預期值。正常日行情約 1,390 檔、法人約 1,340 檔、涵蓋率 96–97%。底線設低一些，目的是抓「只發布一半」這種大問題，又不會因為正常波動誤擋。生產環境應改成依歷史分布設定，例如「低於前 20 個交易日中位數的 90%」。</p>
+
+  <h3>擋與不擋</h3>
+  <p>只告警的兩項都在公司行動這個「加值欄位」上：對不上時照證交所公布值入庫並告警，不讓它擋住策略團隊明天要用的 1,390 檔行情與法人資料。擋下來會讓整天的資料延遲，而每天都誤擋的檢查會讓人開始忽略告警（alert fatigue）。因子超出範圍則是確定的解析錯誤，所以擋（見 <a href="#adjusted">07</a>）。</p>
+
+  <h3>寫入後 4 項對帳，不過就撤銷</h3>
+  <ul>
+    <li>Silver 行情筆數 = staging 筆數；Silver 法人筆數 = staging 筆數。</li>
+    <li><b>Gold 筆數 = 行情筆數</b>；Gold 有法人資料的列數 = 法人筆數。</li>
+  </ul>
+  <p>這是異常情境二（合併表 800 檔、行情 1,000 多檔、DAG 全綠）的防線，一共三道：寫入前的「涵蓋率 ≥ 85%」、寫入後的「Gold = 行情筆數」，以及對帳失敗時的<b>自動撤銷</b>（<code>iceberg_io.undo_run</code>）：</p>
+  <ul>
+    <li>這次 run 寫過的每張表，退回 run 之前的 snapshot，<b>Gold 先、Silver 後</b>，讀的人停在上一個正確版本。</li>
+    <li>如果這次是那張表的第一次寫入，沒有前一版可退，就刪掉這次寫的列。這個 delete 帶上 trade_date 和 <code>content_sha256 = "undone"</code>，修好後用同樣內容重跑時，才不會被冪等檢查當成「內容沒變」而跳過。</li>
+    <li>manifest 記下 <code>undone</code>（每張表怎麼退的），然後 task 失敗並告警。</li>
+  </ul>
+  <p>測試：把 <code>gold.build</code> 截成 800 列 → <code>DataQualityError</code>（<code>gold_rows_equal_quotes</code>）→ 每張表回到原本的筆數（首次載入則回到空表）；修好後重跑 → 1,388／1,388。</p>
+
+  <h3>同類工具比較</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>做法</th><th>優勢</th><th>劣勢</th></tr></thead>
+      <tbody>
+        <tr class="ours"><td><b>自己寫的 Check 清單</b>（採用）</td><td>每條是宣告式的 Polars 表達式，回傳違規的列；零依賴、每條都能單元測試、結果直接進 manifest、跨表和跨日檢查寫起來自然</td><td>沒有現成的報表 UI；規則多了要自己整理</td></tr>
+        <tr><td>Great Expectations</td><td>規則庫豐富、有資料文件（Data Docs）報表</td><td>設定繁重；跨日連續性這種業務規則仍要自訂</td></tr>
+        <tr><td>Soda</td><td>YAML 寫規則、有雲端監控</td><td>進階功能要付費</td></tr>
+        <tr><td>dbt tests</td><td>如果轉換已經用 dbt 寫，最順</td><td>這題沒有 SQL 轉換層</td></tr>
+        <tr><td>Pandera</td><td>DataFrame 的型別、null、主鍵、範圍檢查（支援 Polars），適合把單表契約標準化</td><td>跨表涵蓋率、跨日連續性、公司行動這類規則仍要自訂</td></tr>
+        <tr><td>DuckDB SQL 斷言</td><td>用 SQL 寫規則，分析師看得懂</td><td>資料已經在 Polars 裡，為了檢查多一個引擎</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ICEBERG -->
+<section id="iceberg">
+  <h2><span class="n">05</span>Iceberg 與版本</h2>
+  <p class="lede">對應題目 Q2 與全部五個版本示範。程式在 <code>iceberg_io.py</code>、<code>scripts/demo_versioning.py</code>。</p>
+
+  <h3>Iceberg 是什麼：一棵 metadata 樹</h3>
+  <pre><code>catalog（SQLite / Postgres / Glue）
+  └─ 指向目前的 metadata.json        ← commit 就是「原子地換掉這個指標」
+       └─ snapshots[]                  ← 每次寫入一個；有 id、時間、summary
+            └─ manifest list
+                 └─ manifest files     ← 記錄每個資料檔的 partition 與統計
+                      └─ data files（parquet）</code></pre>
+  <p>寫入時先寫好新的資料檔和 metadata，最後在 catalog 用 compare-and-swap 把指標換到新的 metadata.json。換成功才算 commit；同時有人寫入就失敗重試（樂觀並行控制）。讀的人永遠只看到換指標前或換指標後，不會看到一半。</p>
+
+  <h3>為什麼不直接放 parquet</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>需求</th><th>單純 parquet 資料夾</th><th>Iceberg</th></tr></thead>
+      <tbody>
+        <tr><td>「上週二早上這張表長什麼樣」</td><td>做不到，檔案被覆蓋就沒了</td><td>time travel 到任一 snapshot</td></tr>
+        <tr><td>重寫某一天時，讀的人會不會讀到一半</td><td>會（先刪後寫的空窗）</td><td>不會，原子 commit</td></tr>
+        <tr><td>寫錯了退回</td><td>要自己備份</td><td>rollback，只改 metadata</td></tr>
+        <tr><td>中途加欄位</td><td>新舊檔案欄位不一，讀取端要處理</td><td>欄位用 ID 追蹤，舊檔讀出 null</td></tr>
+        <tr><td>每次寫入是誰、什麼來源</td><td>沒有</td><td>snapshot summary 存 run_id、trade_date、內容指紋</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Partition：現在按日，回補多年歷史後改按年＋compaction</h3>
+  <ul>
+    <li>現在是 <code>identity(trade_date)</code>。查詢幾乎都按日期篩；證交所的修正也是以「一天」為單位。修正某天就是原子地換掉那一天的檔案，snapshot 上的增刪一目了然（刪 1,388、加 1,388），也正好是題目說的「overwrite partition」，不需要額外套件。</li>
+    <li>不用 stock_id 切：約 1,400 檔 × 每天，會變成幾十萬個小 partition，而且查詢通常是「某天全部股票」。</li>
+    <li>Iceberg 是 hidden partitioning：查詢只要寫 <code>WHERE trade_date = ...</code>，不用知道資料夾怎麼切。</li>
+  </ul>
+  <p>代價是小檔：每張表一天只有約 72 KB。用 <code>scripts/bench_partitions.py</code> 實測 500 個交易日（每天 1,390 檔，照 pipeline 的寫法每天一次 overwrite commit，本機 SSD）：</p>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>500 個交易日</th><th>按日（現在）</th><th>按年，不 compaction</th><th>按年＋compaction</th></tr></thead>
+      <tbody>
+        <tr><td>檔案數／manifest 數</td><td class="num">500／500</td><td class="num">500／500</td><td class="num">2／1</td></tr>
+        <tr><td>每次 commit 延遲（前 10 天平均 → 最後 10 天平均）</td><td class="num">20 → 322 ms</td><td class="num">22 → 449 ms</td><td>—</td></tr>
+        <tr><td>讀全部（回測）</td><td class="num">531 ms</td><td class="num">528 ms</td><td class="num"><b>10 ms</b></td></tr>
+        <tr><td>單一股票全歷史</td><td class="num">581 ms</td><td class="num">659 ms</td><td class="num"><b>11 ms</b></td></tr>
+        <tr><td>單日</td><td class="num">9.5 ms</td><td class="num"><b>150 ms</b></td><td class="num">9.6 ms</td></tr>
+        <tr><td>最近 60 天</td><td class="num">86 ms</td><td class="num">189 ms</td><td class="num">10 ms</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <ul>
+    <li><b>檔案數由 commit 次數決定，不是分區粒度。</b>只改按年、不 compaction，檔案一樣多，單日查詢反而變慢。</li>
+    <li><b>效益來自 compaction</b>；按年分區的作用是讓 compaction 能把一年合成一個檔，因為 compaction 不跨分區。</li>
+    <li>兩種寫法的 commit 延遲都隨 commit 數上升（每天多一個 manifest），所以 manifest 合併與 snapshot 過期本來就該排程。</li>
+  </ul>
+  <p>計畫：歷史回補到多年時，partition evolution 改 <code>year(trade_date)</code>（只改 metadata，舊檔不重寫，新舊 layout 共存）；每週 compaction（Trino <code>ALTER TABLE … EXECUTE optimize</code>，PyIceberg 0.12 還沒有 compaction）；snapshot 過期；被訊號引用的 snapshot 先打 Iceberg tag，過期後仍答得出「上週訊號用哪一版」。用 <code>year()</code> 寫入需要 pyiceberg-core（Rust），所以 benchmark 用 <code>uv run --with "pyiceberg[pyiceberg-core]"</code> 跑，不加進 pipeline 的依賴。</p>
+
+  <h3>重抓同一天：不重複，又留兩版</h3>
+  <p>寫入一律是 <code>overwrite(overwrite_filter = trade_date == D)</code>：把那一天整個換掉。PyIceberg 會在<b>同一次 metadata commit</b>裡產生兩個 snapshot：delete（刪掉舊的那天）和 append（寫入新的那天），兩個都帶同一個 run_id。</p>
+  <ul>
+    <li><b>不重複</b>：同一天永遠只有一份。</li>
+    <li><b>兩版都在</b>：修正前的內容留在前一個 snapshot，用 time travel 查得到。</li>
+    <li><b>冪等看內容，不看來源 bytes</b>：寫入前算「內容指紋」，也就是排除 run_id、寫入時間這些每次都不同的欄位後，資料排序再取 sha256，記在 snapshot summary。和目前版本相同就跳過，所以重跑不會製造雜訊版本，snapshot 清單裡的每個版本都代表「資料真的變了」。反過來，修好 parser 後重跑，證交所 bytes 沒變但內容變了，照樣寫新版。早期版本比對的是來源 bytes，這個情況會被略過；獨立 review 抓到後改掉，並寫成測試。</li>
+  </ul>
+  <h4>為什麼用 overwrite partition，不用 MERGE</h4>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>做法</th><th>適合</th><th>這題</th></tr></thead>
+      <tbody>
+        <tr class="ours"><td><b>overwrite partition</b>（採用）</td><td>來源每次給「一整天的完整快照」</td><td>證交所修正是重新發布整天，整天替換最簡單、最不會錯</td></tr>
+        <tr><td>MERGE INTO（upsert）</td><td>來源只給「變動的列」（例如 CDC）</td><td>還要處理「某檔被刪除」的情況；PyIceberg 0.12 也沒有完整 MERGE</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>延伸：Iceberg 的列層級更新有 copy-on-write（改寫整個資料檔，讀快寫慢）和 merge-on-read（寫 delete file，讀時合併，寫快讀慢）兩種。這題用整個 partition 替換，等於 copy-on-write 的極端情況，讀取端完全沒有額外成本。</p>
+
+  <h3>五個示範，以及輸出怎麼解讀</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>指令</th><th>做什麼</th><th>解讀重點</th></tr></thead>
+      <tbody>
+        <tr><td><code>make demo-snapshots</code></td><td>列出 snapshot：id、時間、operation、trade_date、run_id、新增／刪除筆數、是否在目前血緣上</td><td>一次修正會出現一對 delete＋append，同一個 run_id</td></tr>
+        <tr><td><code>make demo-asof SNAPSHOT=&lt;id&gt;</code> 或 <code>AT='...'</code></td><td>time travel</td><td>時間是「commit 時間」，不是交易日</td></tr>
+        <tr><td><code>make demo-correct DATE=2026-10-29</code></td><td>注入一份把 2330 成交股數從 18,403,916 改成 12,345,678 的「修正版」重跑</td><td>筆數仍 1,388、distinct 1,388；行情和 Gold 各多一個 snapshot，法人表與公司行動表因內容沒變而 skipped</td></tr>
+        <tr><td><code>make demo-rollback</code></td><td>退回最近一次 run 之前：該 run 寫過的每張表一起退（<code>TABLE=…</code> 只退一張）</td><td>只改 metadata 指標；被退掉的 snapshot 和檔案都還在</td></tr>
+        <tr><td><code>make demo-evolve</code></td><td>加一個欄位</td><td>舊 snapshot 仍可查；新欄位在舊資料上是 null</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>給策略團隊：time travel 就是 point-in-time</h3>
+  <p>回測如果用「修正後」的資料，等於用了當時拿不到的資訊（look-ahead）。正確做法是：算訊號時記下 Gold 的 snapshot id（manifest 已經有），回測時用 <code>FOR VERSION AS OF</code> 讀「當時那一版」。這是 Iceberg 對交易團隊最直接的價值。</p>
+
+  <h3>Catalog 的選擇</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>Catalog</th><th>優勢</th><th>劣勢</th></tr></thead>
+      <tbody>
+        <tr class="ours"><td><b>SQLite</b>（題目指定，預設）</td><td>零部署，一個檔案</td><td>同時只能一個 writer，所以三張 Silver 表由同一個 task 依序寫入</td></tr>
+        <tr class="ours"><td><b>Postgres（JDBC）</b>（大資料配置，已驗證）</td><td>多 writer；Trino、Spark、PyIceberg 都能共用</td><td>要維運一個資料庫</td></tr>
+        <tr><td>AWS Glue</td><td>AWS 託管，Athena、EMR 直接讀</td><td>綁 AWS</td></tr>
+        <tr><td>REST（Polaris、Nessie、Unity）</td><td>標準化介面、權限控管；Nessie 支援跨表交易與 Git 式分支</td><td>多一個服務</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>維護：snapshot 不能無限長大</h3>
+  <p>每次寫入都留檔案，久了要清：expire snapshots（刪掉過期版本）、compaction（合併小檔）、remove orphan files（清掉沒被引用的檔）。生產環境通常用 Trino（<code>ALTER TABLE ... EXECUTE expire_snapshots / optimize</code>）或 Spark 的維護程序排程執行。</p>
+  <div class="note warn"><b>保留期和「查上週那一版」有衝突</b>expire 會讓舊版本查不到。所以保留期要跟策略團隊對齊，例如至少保留 90 天；被訊號用過的版本另外打 tag（Iceberg 的 ref），tag 可以有自己的保留期，不會被一般清理刪掉。目前專案還沒設定保留政策，這是上線前要補的。</div>
+
+  <h3>同類表格式比較</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>格式</th><th>優勢</th><th>劣勢</th></tr></thead>
+      <tbody>
+        <tr class="ours"><td><b>Apache Iceberg</b>（採用）</td><td>引擎中立（Spark、Trino、Flink、DuckDB、Snowflake、Athena）；hidden partitioning 與 partition evolution；PyIceberg 不需要 JVM</td><td>Python 寫入端功能比 Spark 少（例如 MERGE）</td></tr>
+        <tr><td>Delta Lake</td><td>Databricks 生態完整；delta-rs 也能用 Python 寫</td><td>過去較綁 Databricks／Spark；partition evolution 較弱</td></tr>
+        <tr><td>Apache Hudi</td><td>高頻 upsert、增量讀取強</td><td>概念多、調校複雜，適合串流 CDC</td></tr>
+        <tr><td>Hive 式 parquet 資料夾</td><td>最簡單</td><td>沒有版本、原子性、schema 演進</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- GOLD -->
+<section id="gold">
+  <h2><span class="n">06</span>合併表</h2>
+  <p class="lede">題目要求「兩張表用股票代碼與日期 join，產出每日個股行情＋法人買賣超的合併表」。程式在 <code>gold.py</code>。</p>
+  <h3>LEFT JOIN，從行情出發</h3>
+  <p>T86 只列當天有法人交易的股票。10-29 行情 1,388 檔、法人 1,340 檔，inner join 會安靜地少掉 48 檔。所以：</p>
+  <ul>
+    <li>以行情為主做 LEFT JOIN，合併表筆數永遠等於行情筆數。</li>
+    <li>沒有法人資料的股票，法人欄位填 0，並用 <code>institutional_reported = false</code> 區分「真的零交易」和「資料缺漏」。</li>
+    <li>對帳檢查：Gold 筆數 = 行情筆數；Gold 中 <code>institutional_reported = true</code> 的列數 = 法人筆數。</li>
+  </ul>
+  <h3>欄位</h3>
+  <p>交易日、代號、名稱、OHLC、漲跌號與漲跌、成交股數、成交金額；外資、外資自營商、投信、自營商、三大法人合計的買賣超；<code>institutional_reported</code>、<code>is_ex_event</code>（除權息事件，例如 10-27 的 2028、6931）、<code>adj_factor</code>（當天所有事件的因子相乘）、<code>corporate_action</code>（當天生效的事件類型，例如 10-27 的 1516、6142 是 capital_reduction）；以及血緣欄位：<code>quotes_snapshot_id</code>、<code>institutional_snapshot_id</code>、<code>run_id</code>、<code>built_at</code>。</p>
+  <h3>Gold 的冪等</h3>
+  <p>Gold 和 Silver 用同一套內容指紋：每次都重建，但內容和目前版本一樣就不寫。Silver 被修正（例如證交所重新發布某天），Gold 內容跟著變，就留下一個新版本；它讀的 Silver snapshot id 也記在 Gold 的欄位裡。</p>
+  <h3>替代做法：用 view</h3>
+  <p>也可以在 Trino 建 view，查詢時才 join。好處是不用存第二份資料；壞處是 view 沒有自己的版本歷史，「上週那一版合併表」要靠兩張底表的 time travel 拼回來。策略團隊要的是能引用版本的一張表，所以實體化成 Gold 表。</p>
+</section>
+
+<!-- ADJUSTED -->
+<section id="adjusted">
+  <h2><span class="n">07</span>還原權值（調整價）</h2>
+  <p class="lede">除權息、減資、分割會讓價格跳一格，未調整的序列會把它當成真的漲跌。做法是直接採用證交所公布的參考價，算出每日調整因子並檢查「我們讀對了」；Gold 保存原始價和因子，還原價在查詢時才算。程式在 <code>corporate_actions.py</code>、<code>adjust.py</code>。</p>
+
+  <h3>題目沒要求，為什麼要做</h3>
+  <ul>
+    <li><b>擋寫入的連續性檢查需要它</b>：事件生效日的漲跌是相對「開盤競價基準」，不是昨收。10-23 颱風日除息的 2028、6931 在 10-27 生效，沒有事件表，這兩檔會讓連續性檢查失敗，整天擋下。</li>
+    <li><b>策略團隊算報酬需要因子</b>：沒有因子，除權息日的跳空會被當成真的虧損。</li>
+  </ul>
+  <p>範圍刻意收窄：只用證交所公布的值，不另抓明細頁重算，也不接第三方資料（理由見 <a href="#qa">13</a> 面試問答 Q46、Q48）。</p>
+
+  <h3>事件從哪來</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>證交所報表</th><th>事件</th><th>生效日</th><th>用到的欄位</th></tr></thead>
+      <tbody>
+        <tr><td>TWT49U</td><td>除權、除息（含現金增資除權）</td><td>除權息交易日</td><td>除權息前收盤價、除權息參考價、權值+息值、開盤競價基準</td></tr>
+        <tr><td>TWTAUU</td><td>減資（彌補虧損、退還股款）</td><td>恢復買賣日</td><td>停止買賣前收盤價格、恢復買賣參考價、開盤競價基準</td></tr>
+        <tr><td>TWTCAU</td><td>ETF 分割／反分割</td><td>恢復買賣日</td><td>停止買賣前收盤價格、恢復買賣參考價、開盤競價基準</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><code>adj_factor = 參考價 ÷ 事件前收盤</code>，同一天有多個事件就相乘。三張報表都抓「前一個交易日之後到今天」的區間，每一頁原樣存進 Bronze，所以「當時拿到的數字」也有版本可查。</p>
+
+  <h3>檢查：驗「我們讀對了」，不驗「證交所算對了」</h3>
+  <p>參考價是證交所自己的定義，市場就照它交易。會出錯的是我們這一端：讀錯欄、解析錯數字。</p>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>檢查</th><th>內容</th><th>不過時</th></tr></thead>
+      <tbody>
+        <tr><td><code>ca_adj_factor_range</code></td><td>除權息 (0, 1]；減資與分割 (0, 100]。超出就是解析錯誤</td><td class="block">擋</td></tr>
+        <tr><td><code>quotes_price_continuity</code></td><td>非 X 日：收盤 − 漲跌 = 開盤競價基準。0050 在 2025-06-18 以 1 拆 4 恢復交易，47.57 − 0.41 = 47.16，正是 TWTCAU 的參考價：交易所自己的價格序列確認了事件</td><td class="block">擋</td></tr>
+        <tr><td><code>ca_ref_price_matches_row</code></td><td>TWT49U 同一列：前收 − 權值+息值，捨去到分 = 參考價</td><td class="soft">只告警</td></tr>
+        <tr><td><code>ca_before_close_matches_silver</code></td><td>事件前收盤 = 我們 Silver 的前一日收盤：兩份報表，同一個數字</td><td class="soft">只告警</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>同一列三個欄位對得上，就代表沒有一個是從錯的欄位讀來的。證交所是「捨去」到分，不是四捨五入：2330（2026-03-17）那一列是 1,845.00 − 6.000035 = 1,838.999965，公布 1,838.99。所以條件是 0 ≤ 差 &lt; 0.01，用 decimal 精確計算；「誤差一檔」在千元以上是 5 元，太鬆。錄到的 94 筆 TWT49U 事件全部成立，參考價差 1 分也會被抓到，都寫成測試。</p>
+  <p>後兩條只告警：公司行動是加值欄位，對不上時照證交所公布值入庫並告警，明天的行情和法人資料不必等它。</p>
+
+  <h3>前復權與後復權</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>方法</th><th>怎麼算</th><th>適合</th></tr></thead>
+      <tbody>
+        <tr><td>前復權（backward，預設）</td><td>最後一天保持原價，之前的價格乘上之後所有因子</td><td>看圖、算到今天為止的報酬</td></tr>
+        <tr><td>後復權（forward）</td><td>第一天保持原價，之後的價格除以之前所有因子</td><td>回測（point-in-time）：新的一天加進來時，舊價格不會變</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>兩種算出來的報酬率完全一樣，差別只在價格水準。0050 分割：未調整的序列顯示 −74.8%；兩種還原後都是 +0.87%，等於證交所自己的 0.41 ÷ 47.16。</p>
+  <pre><code>make demo-adjusted STOCK=2762 START=2026-10-28 END=2026-10-30                 # 前復權
+make demo-adjusted STOCK=2762 START=2026-10-28 END=2026-10-30 METHOD=forward  # 後復權
+
+-- Trino：前復權收盤
+SELECT trade_date, close,
+  round(close * coalesce(exp(sum(ln(adj_factor)) OVER (PARTITION BY stock_id ORDER BY trade_date DESC
+    ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING)), 1), 4) AS close_adj
+FROM iceberg.twse.daily_market_wide WHERE stock_id = '2762' ORDER BY trade_date</code></pre>
+  <p>實測（live）：2762 於 10-29 除息，10-28 收盤 80.00 × 0.977375 = 78.19，等於官方除息參考價；Python 與 Trino 結果相同。</p>
+
+  <h3>為什麼存因子，不存調整後的價格</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>做法</th><th>優勢</th><th>劣勢</th></tr></thead>
+      <tbody>
+        <tr class="ours"><td><b>存原始價＋每日因子，查詢時算</b>（採用）</td><td>歷史不改寫；每個 snapshot 都能算出當時的還原價；因子錯了只改一筆</td><td>查詢時多一步累乘</td></tr>
+        <tr><td>直接存調整後價格</td><td>讀取最簡單</td><td>每次除權息都要改寫整段歷史，舊版本全部和今天對不上，「上週訊號用哪一版」答不出來</td></tr>
+        <tr><td>買現成的還原價（第三方資料商）</td><td>不用自己算</td><td>黑盒，資料源算錯時無從得知；多一個外部依賴，而參考價本來就是證交所定義的</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note warn"><b>還沒涵蓋的</b>面額變更（例如 10 元改 1 元）在證交所網站找不到 JSON 資料源，目前沒有調整因子。上櫃股票不在範圍內。</div>
+</section>
+
+<!-- CLOSURE -->
+<section id="closure">
+  <h2><span class="n">08</span>臨時休市</h2>
+  <p class="lede">題目要求「臨時休市（例如颱風假）不能誤跑」。官方行事曆做不到，因為颱風假前一晚才宣布，永遠不會出現在開休市表上。做法是直接問證交所：那天有沒有盤中成交。程式在 <code>pipeline.py</code> 的 <code>resolve_missing_data</code>。</p>
+  <h3>問題</h3>
+  <p>2026-10-23 薔琵颱風休市：官方開休市表上沒有這天；MI_INDEX、T86 回應「很抱歉，沒有符合條件的資料!」，和一般假日一模一樣。只看行事曆，系統會判成「資料延遲」，等到最後失敗。</p>
+  <h3>做法</h3>
+  <pre><code>19:00 cutoff 仍無資料
+ ├─ 行情或法人任一份已有資料 → 市場有開、只是晚 → 失敗＋告警
+ └─ 兩份都是 0 筆 → 抓 MI_5MINS（每 5 秒委託成交統計，開盤日 09:00–13:30 都有紀錄）
+      ├─ 明確回「很抱歉，沒有符合條件的資料!」→ 臨時休市：寫 closures/&lt;date&gt;.json，run 綠燈
+      └─ 有盤中紀錄，或任何其他回應 → MissingDataError，失敗＋告警（fail closed）</code></pre>
+  <ul>
+    <li><b>實測</b>：2026-10-22（正常日）3,241 筆，09:00–13:30；10-23 與 2024-10-31（都是颱風休市）回「沒有符合條件的資料」。</li>
+    <li><b>留證據</b>：MI_5MINS 的原始回應和其他報表一樣存進 Bronze；<code>closures/&lt;date&gt;.json</code> 記下理由、Bronze 位置和來源網址，狀態 <code>confirmed_by_twse_data</code>，同時發 <code>ALERT unscheduled_closure_detected</code>。</li>
+    <li><b>之後的日子</b>：記錄過的休市日，下一個交易日的「前一交易日已載入」檢查會跳過它，不會要求先補一個沒開盤的日子。</li>
+    <li><b>fixture 模式</b>：沒錄到 MI_5MINS 的日子一律當異常，不會因為「找不到檔案」被判成休市。</li>
+    <li><b>人工補記</b>（例如事後確認）：<code>python -m twse_etl.pipeline record-closure --date 2026-10-23 --reason "颱風"</code>。</li>
+  </ul>
+  <h3>為什麼要等 cutoff，而且兩份都 0 筆</h3>
+  <p>如果只靠單一來源，它暫時異常回「沒資料」時，交易日就會被判成休市、靜默略過。要求兩個獨立條件同時成立（行情、法人都沒有任何一列，而且交易所的盤中統計也說沒有），任何一邊答錯，結果只會是「多告警一次」，不會是「少一天資料」。</p>
+  <h3>同類做法比較</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>做法</th><th>優勢</th><th>劣勢</th></tr></thead>
+      <tbody>
+        <tr><td>只看官方行事曆</td><td>確定性、零成本</td><td>颱風假抓不到，必定誤判</td></tr>
+        <tr><td>人事行政總處停班停課公告</td><td>權威、前一晚就公布</td><td>公布的是「台北市停班停課」，不等於「證交所休市」；網頁格式會變</td></tr>
+        <tr class="ours"><td><b>問證交所 MI_5MINS</b>（採用）</td><td>同一個資料源、結果確定、免金鑰；回應本身就是證據</td><td>要等到 19:00 cutoff 才判斷；只認一個明確的回應字串</td></tr>
+        <tr><td>值班人工判斷</td><td>最可靠</td><td>19:00 後要有人在；保留成 <code>record-closure</code> 補記指令</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>為什麼不用 LLM 讀新聞判斷，見 <a href="#qa">13</a> 面試問答 Q41。</p>
+</section>
+
+<!-- DEPLOY -->
+<section id="deploy">
+  <h2><span class="n">09</span>CI/CD 與搬上 AWS</h2>
+  <p class="lede">對應題目 Q3 與實作 3。設定在 <code>.github/workflows/</code>、<code>scripts/deploy_dags.sh</code>。</p>
+  <h3>CI：每次 push 和 PR 都跑兩個 job</h3>
+  <ul>
+    <li><b>Cleaning logic unit tests</b>：<code>uv sync --locked</code> 安裝鎖定版本 → ruff lint＋格式檢查 → pytest。測試包含清洗、交易日與臨時休市、稽核（25 種故障注入）、對帳失敗撤銷、還原權值（94 筆真實除權息），以及用錄好的真實證交所資料跑的端到端流程，共 67 個，不連網，約 4 秒。</li>
+    <li><b>DAG imports and has no cycles</b>：先 build 正式的 Airflow image，在 image 裡跑 DagBag（2 個測試）：沒有 import error、沒有循環、task 順序符合規格。在正式 image 裡測，才能抓到「本機有裝、production 沒裝」的套件問題。</li>
+  </ul>
+  <h3>CD：main 的 CI 成功後自動觸發</h3>
+  <p>CD 用 <code>workflow_run</code> 監聽 CI，條件是：CI 成功、由 <b>push</b> 觸發、分支是 main、而且來自<b>本 repo</b>（或手動 <code>workflow_dispatch</code>）。只看「分支叫 main」不夠：fork 也可以有一個叫 main 的分支送 PR，這個漏洞在獨立 review 時被找到，PR #3 修正。然後執行 <code>deploy_dags.sh</code>：</p>
+  <ol>
+    <li><b>拒絕空的 dags/</b>：沒有任何 DAG 檔就中止。這是針對異常情境三（merge 後 DAG 全部消失）的防線，因為下一步的 <code>rsync --delete</code> 會把目標清空。</li>
+    <li>所有要部署的 Python 檔先 <code>py_compile</code>。</li>
+    <li>在暫存資料夾組好 bundle：dags＋<code>twse_etl</code> 套件＋<code>.airflowignore</code>（讓 Airflow 不把函式庫當 DAG 解析）＋<code>DEPLOYED_VERSION</code>（commit sha）。</li>
+    <li><code>rsync --delete</code> 鏡像到目標資料夾（刪掉的 DAG 也會跟著刪）。</li>
+    <li>每版留一個 tarball，回滾就是解壓上一版。</li>
+  </ol>
+  <p>GitHub 上把 bundle 上傳成 artifact <code>airflow-dags-&lt;sha&gt;</code>。本機用 <code>make deploy-from-ci</code> 把那一包裝進 Airflow 掛載的資料夾。GitHub 的雲端 runner 連不到本機，所以本機最後一步是一行指令；題目也說「CD 在本機模擬即可，例如把 dags/ 打包成 artifact」。</p>
+  <p><b>image 與程式分開</b>：image 只裝第三方套件；DAG 和 <code>twse_etl</code> 透過掛載資料夾部署。改程式不用重 build image，部署只要幾秒。</p>
+
+  <h3>部署方式比較</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>做法</th><th>優勢</th><th>劣勢</th></tr></thead>
+      <tbody>
+        <tr class="ours"><td><b>打包 bundle → 同步到 DAG 資料夾</b>（採用）</td><td>和 MWAA 的 S3 同步是同一個模型；有版本檔、可回滾</td><td>本機最後一步要手動</td></tr>
+        <tr><td>Airflow 3 DAG bundle（GitDagBundle）</td><td>Airflow 直接從 Git 拉，不用部署腳本，還能看到每個 run 用的版本</td><td>Airflow 要能存取 Git；缺少「部署前檢查」這道關</td></tr>
+        <tr><td>git-sync sidecar（Kubernetes）</td><td>Helm chart 標準做法</td><td>需要 Kubernetes</td></tr>
+        <tr><td>把 DAG 打進 image</td><td>程式與環境版本完全一致</td><td>每次改 DAG 都要 build、推、重啟</td></tr>
+        <tr><td>Mac 上跑 self-hosted runner</td><td>全自動</td><td>公開 repo 上，別人 fork 的 PR 可能在你的機器上執行程式，不安全</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>搬到 AWS（S3＋Glue）要改什麼</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>要改</th><th>不用改</th></tr></thead>
+      <tbody>
+        <tr><td>環境變數：<code>ICEBERG_CATALOG_TYPE=glue</code>、<code>ICEBERG_WAREHOUSE=s3://…</code>、<code>TWSE_DATA_URI=s3://…</code></td><td>清洗、稽核、對帳與撤銷、還原權值、Iceberg 讀寫、DAG 的程式碼</td></tr>
+        <tr><td><code>docker/requirements.txt</code> 加 <code>pyiceberg[glue,s3fs]</code>；MWAA 執行角色給 S3＋Glue 權限，不放金鑰</td><td><code>storage.py</code>：pyarrow FileSystem 對本機路徑和 <code>s3://</code> 是同一套呼叫</td></tr>
+        <tr><td>CD 開啟 <code>deploy-aws</code> job（設定 repo variables），用 GitHub OIDC 取得臨時權限，<code>s3 sync</code> 到 MWAA 的 dags/</td><td>部署腳本本身（同一個 bundle）</td></tr>
+        <tr><td>告警函式改送 SNS／Slack</td><td>告警的呼叫點</td></tr>
+        <tr><td>登入：SimpleAuthManager → MWAA 的 IAM／SSO</td><td>DAG 與權限以外的一切</td></tr>
+        <tr><td>SQL：Trino → Athena（同一個 Glue catalog）</td><td>Iceberg 表、snapshot、time travel 的查法</td></tr>
+        <tr><td>SQLite 單 writer 的限制消失，三張 Silver 表可以平行寫</td><td>寫入邏輯</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note warn"><b>還沒實測的部分</b>Bronze／staging 寫 <code>s3://</code> 在設計上支援，但目前只有 Iceberg warehouse 在 S3（SeaweedFS）實測過。本專案在 Airflow 3.3 開發，選 MWAA 版本時要確認它提供的 Airflow 版本。</div>
+  <p>「只改設定」不是口號：<code>get_catalog</code> 是唯一知道 catalog 在哪的函式，而大資料配置（S3＋Postgres catalog）已經在不改任何 pipeline 程式的情況下實際跑通（見 <a href="#scale">10</a>）。</p>
+  <h3>金鑰</h3>
+  <p>repo 裡沒有任何金鑰。<code>.env</code> 在 gitignore 裡，由 <code>make env</code> 在每台機器產生隨機 secret；AWS 用 GitHub OIDC 換臨時憑證，不存長期 key。pipeline 本身不需要任何第三方 API key：資料源是證交所公開 API，臨時休市也是問證交所。</p>
+</section>
+
+<!-- SCALE -->
+<section id="scale">
+  <h2><span class="n">10</span>大資料配置與查詢</h2>
+  <p class="lede">題目允許「用 docker 起 Spark 或 Trino」。<code>make bigdata-up</code> 在 Airflow 之外再起三個服務，pipeline 程式完全不改。</p>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>元件</th><th>本機預設</th><th>大資料配置</th><th>上雲對應</th></tr></thead>
+      <tbody>
+        <tr><td>資料存放</td><td>本機資料夾</td><td>SeaweedFS（S3 API）</td><td>S3</td></tr>
+        <tr><td>catalog</td><td>SQLite</td><td>Postgres（Iceberg JDBC）</td><td>Glue 或 REST</td></tr>
+        <tr><td>查詢</td><td>PyIceberg（Python）</td><td>Trino（SQL，:8081）</td><td>Athena、Trino、Spark</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>2026-10-30 實測：在這個配置下用真實資料跑 10-28、10-29，Trino 查 Gold 得 1,386／1,388 筆；<code>$snapshots</code> 有兩個 append；<code>FOR VERSION AS OF</code> 10-28 的版本回 1,386 筆，目前版本 2,774 筆。</p>
+  <pre><code>make trino-sql SQL='SELECT trade_date, count(*) FROM iceberg.twse.daily_market_wide GROUP BY 1'
+make trino-sql SQL='SELECT snapshot_id, operation, summary FROM iceberg.twse."daily_quotes$snapshots"'
+make trino-sql SQL='SELECT count(*) FROM iceberg.twse.daily_quotes FOR VERSION AS OF 8040634120331857379'</code></pre>
+  <h3>有 UI 的查詢工具</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>工具</th><th>形式</th><th>適合誰</th></tr></thead>
+      <tbody>
+        <tr><td>DBeaver Community</td><td>免費桌面版，內建 Trino driver，可下 SQL、瀏覽、匯出 CSV／Excel</td><td>工程師、會寫 SQL 的研究員</td></tr>
+        <tr><td>Superset</td><td>網頁，SQL Lab＋儀表板</td><td>策略團隊共用圖表</td></tr>
+        <tr><td>Metabase</td><td>網頁，點選式查詢</td><td>不寫 SQL 的人</td></tr>
+        <tr><td>Jupyter＋PyIceberg／Polars</td><td>notebook</td><td>做研究、回測</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>資料量變大時怎麼擴</h3>
+  <ul>
+    <li>儲存與 catalog：已經是 S3＋多 writer catalog，直接適用。</li>
+    <li>查詢：Trino 加 worker 水平擴充；Spark 可以接同一個 JDBC catalog。</li>
+    <li>寫入：每天 1,400 列不需要 Spark；如果改抓逐筆成交（tick），擷取要平行化，寫入改用 Spark 或 Flink。</li>
+    <li>檔案：回補多年歷史後 partition 改按年，並排程 compaction（實測見 <a href="#iceberg">05</a>）。</li>
+  </ul>
+</section>
+
+<!-- COMPUTE -->
+<section id="compute">
+  <h2><span class="n">11</span>GPU 訓練與運算引擎</h2>
+  <p class="lede">之後上 AWS 要用大量 GPU 跑 Transformer、GRU、boosting 和基因演算法因子挖掘。建議：<b>Polars 為主（搭配它的 GPU 引擎），訓練直接吃 Arrow／GPU 記憶體；Trino 只當給人查的 SQL 層（AWS 上換 Athena）；Spark 等資料大到單機放不下再上；DuckDB 當互動分析的輔助。</b></p>
+
+  <h3>先分清楚：四個工具不在同一層</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>工具</th><th>是什麼</th><th>GPU</th><th>在這套架構的位置</th></tr></thead>
+      <tbody>
+        <tr class="ours"><td><b>Polars</b>（建議主力）</td><td>單機 DataFrame 引擎（Rust、Arrow）</td><td>有：GPU 引擎（NVIDIA cuDF，<code>collect(engine="gpu")</code>），同一份程式碼</td><td>特徵工程；pipeline 已經在用</td></tr>
+        <tr><td>DuckDB</td><td>單機 SQL 引擎</td><td>沒有</td><td>notebook 裡下 SQL、臨時分析；能直接讀 S3 上的 parquet，Iceberg 要經 REST 或 Glue 這類 catalog</td></tr>
+        <tr><td>Trino</td><td>分散式 SQL 查詢服務</td><td>沒有</td><td>給人和 BI 查資料、time travel；不適合餵模型</td></tr>
+        <tr><td>Spark</td><td>分散式運算框架（JVM）</td><td>有：RAPIDS Accelerator</td><td>只有資料大到單機放不下（逐筆成交、委託簿）才需要</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>為什麼是 Polars</h3>
+  <ul>
+    <li><b>資料量其實不大</b>：日頻 1,400 檔 × 250 天 × 20 年約 700 萬列，一台機器的記憶體就裝得下；分鐘線 10 年約 10 億列，單機 GPU 節點分批讀取也處理得了。分散式的協調成本在這個量級是純負擔。</li>
+    <li><b>瓶頸在 GPU 訓練</b>：訓練花的時間遠大於準備資料。Polars → Arrow → PyTorch／XGBoost 不經過 pandas，少一次複製；GPU 引擎讓 group_by、join、rolling 也在 GPU 上跑。</li>
+    <li><b>同一套程式</b>：清洗、稽核、還原價都已經用 Polars 寫，研究端沿用，就不會出現「研究和 production 算法不一樣」。</li>
+    <li><b>版本可重現</b>：PyIceberg 讀「某個 snapshot id」轉成 Polars，訓練資料就標註了版本，回測可以重現。</li>
+  </ul>
+
+  <h3>四類模型怎麼接</h3>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>工作</th><th>建議做法</th></tr></thead>
+      <tbody>
+        <tr><td>Boosting（XGBoost、LightGBM、CatBoost）</td><td>Polars 做特徵 → Arrow 直接進 GPU 訓練（例如 XGBoost <code>device="cuda"</code>）；單機多卡就夠</td></tr>
+        <tr><td>Transformer、GRU</td><td>Polars 把面板資料整理成「日期 × 股票 × 特徵」的張量，轉到 PyTorch；滑動視窗切樣本，直接從 GPU 記憶體取</td></tr>
+        <tr><td>基因演算法因子挖掘</td><td>瓶頸是同時評估上萬個候選公式：把價格、成交量放成「日期 × 股票」的 GPU 張量，候選公式用 PyTorch 運算批次評估，Rank IC 也在 GPU 上算。這一段用 DataFrame 引擎反而慢</td></tr>
+        <tr><td>超參數搜尋、多個模型</td><td>SageMaker 或 EKS 的 GPU 節點平行跑；Airflow 只負責觸發，並記錄用了哪個資料版本</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>什麼時候該上 Spark</h3>
+  <ul>
+    <li>改抓逐筆成交、委託簿，單日就是 GB 等級，需要多台機器同時處理。</li>
+    <li>Iceberg 的大規模維護（compaction、重寫歷史）；不過 AWS 上 Athena 的 OPTIMIZE 和 Glue 的自動 compaction 多半就夠。</li>
+    <li>代價是叢集維運、JVM 調校，以及比較慢的迭代速度。</li>
+  </ul>
+  <div class="note warn"><b>look-ahead 的提醒</b>訓練資料要用「當時的版本」：用 Iceberg snapshot 讀取。還原價優先用報酬率，或用後復權：前復權會用「之後」的因子調整過去的價格水準，報酬率不受影響，但拿價格水準當特徵（例如突破某個價位）就含有未來資訊。</div>
+</section>
+
+<!-- LIMITS -->
+<section id="limits">
+  <h2><span class="n">12</span>已知限制與改進</h2>
+  <p class="lede">主動講出限制，比被問到才承認更有說服力。每一條都附上「現在怎麼兜底」和「上線前會怎麼改」。</p>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>限制</th><th>現在怎麼兜底</th><th>改進方向</th></tr></thead>
+      <tbody>
+        <tr><td>對帳失敗會自動撤銷，但 commit 到撤銷之間（隔了 build_gold、reconcile 兩個 task）讀得到</td><td>撤銷 Gold 先做；寫入前 24 項已擋掉絕大多數問題；run 失敗＋告警</td><td>用 Iceberg branch 做真正的 WAP：寫到 audit 分支，檢查過才 fast-forward 到 main</td></tr>
+        <tr><td>三張 Silver 表各自 commit，跨表不是原子的</td><td>Gold 只在三張都寫完後才建；重跑冪等，會補齊；manifest 記錄每張表的版本</td><td>支援多表交易的 catalog（Nessie），或讓下游只讀 manifest 指定的版本</td></tr>
+        <tr><td>SQLite catalog 只能單一 writer</td><td>三張表由同一個 task 依序寫入</td><td>Postgres／Glue（Postgres 已驗證）</td></tr>
+        <tr><td>告警只是 log 行</td><td>集中在一個函式</td><td>接 Slack、PagerDuty 或 SNS，並設值班</td></tr>
+        <tr><td>門檻是固定值（900／500／85%）</td><td>設成底線，避免誤擋</td><td>改成依歷史分布的動態門檻</td></tr>
+        <tr><td>每天一個 commit，檔案與 manifest 隨天數增加</td><td>幾百天不痛（實測 500 天讀全部 531 ms）</td><td>回補多年後 partition 改按年＋每週 compaction（見 <a href="#iceberg">05</a>）</td></tr>
+        <tr><td>snapshot 沒有保留政策</td><td>目前全部保留</td><td>與策略團隊訂保留期；訊號用過的版本打 tag</td></tr>
+        <tr><td>證交所事後修正不會被自動發現</td><td>手動指定日期重跑即可產生新版本</td><td>T+1 早上自動重抓；內容指紋不同就產生新版本並通知</td></tr>
+        <tr><td>臨時休市只認 MI_5MINS 的一個明確回應</td><td>其他回應一律失敗告警：只會多告警，不會少一天；可用 <code>record-closure</code> 人工補記</td><td>證交所改了回應文字時，更新常數並補錄 fixture</td></tr>
+        <tr><td>Bronze／staging 在本機磁碟</td><td>大資料配置下 Iceberg 已在 S3</td><td><code>TWSE_DATA_URI=s3://…</code>，程式已支援</td></tr>
+        <tr><td>本機 CD 最後一步要手動</td><td><code>make deploy-from-ci</code> 一行</td><td>上雲用 <code>deploy-aws</code>；本機可用定時拉取</td></tr>
+        <tr><td>只涵蓋上市，不含上櫃</td><td>README 列為假設</td><td>加 TPEx 資料源，同一套流程</td></tr>
+        <tr><td>面額變更沒有資料源</td><td>沒有調整因子；README 列為缺口</td><td>加一個人工新增事件的入口（附來源），過同一套因子範圍檢查</td></tr>
+        <tr><td>本機登入用 SimpleAuthManager（密碼存在本機檔案）</td><td>只在本機用，只有一個 admin 帳號</td><td>上 AWS 用 MWAA 的 IAM／SSO</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- QA -->
+<section id="qa">
+  <h2><span class="n">13</span>面試問答</h2>
+  <p class="lede">題目說「現場會針對每個設計決策追問」。下面依主題整理可能的問題。先自己回答，再展開對照。每題有一段可以直接說的「建議回答」，和一段幫你理解背後原理的「講解」。</p>
+  <div class="qa-tools">
+    <button class="tool" type="button" id="qa-open">全部展開</button>
+    <button class="tool" type="button" id="qa-close">全部收合</button>
+  </div>
+
+  <div class="qa-group">
+    <h3>Airflow 與 DAG</h3>
+    <details class="qa"><summary><span class="q">Q1</span><span>為什麼 task 這樣切？切更細或更粗會怎樣？</span></summary><div class="ans">
+      <p class="say">我用兩個原則切：一個 task 做一件可以單獨重跑的事；失敗類型不同的步驟要分開。擷取是網路問題，要重試；稽核是資料問題，不該重試，所以一定要拆開。切更粗，一個錯就要整段重跑，也看不出壞在哪；切更細，task 之間要傳更多中間狀態，排程開銷也變大。</p>
+      <p class="why">Airflow 的重試、逾時、告警都是以 task 為單位設定的，所以「重試策略不同」是最實際的切分依據。task 之間只傳檔案位置和版本號，資料不走 XCom。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q2</span><span>交易日怎麼判斷？颱風假怎麼辦？</span></summary><div class="ans">
+      <p class="say">三道關。cron 只排週一到五；再查證交所的官方開休市表；颱風假不會出現在官方表上，所以 19:00 cutoff 時如果行情和法人都還是 0 筆，就問證交所的盤中統計 MI_5MINS。它明確回「沒有符合條件的資料」才當休市，原始回應存進 Bronze 當證據，run 綠燈；有盤中紀錄或任何其他回答，一律失敗告警。</p>
+      <p class="why">官方表本身也有坑：裡面列了「開始交易日」「最後交易日」這種交易日，整張當休市表會漏跑。10/23 薔琵颱風是真實案例：MI_INDEX、T86 的回應和一般假日完全相同；MI_5MINS 在正常日 10/22 有 3,241 筆，10/23 和 2024-10-31 兩個颱風日都是「沒有資料」。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q3</span><span>資料晚發布怎麼等？什麼時候放棄？</span></summary><div class="ans">
+      <p class="say">sensor 每 10 分鐘檢查一次，用 reschedule 模式，等待期間不佔 worker。「資料到了」的定義是狀態 OK、日期正確、筆數達到下限，避免寫入空表或只發布一半的資料。17:00 起每次都告警，19:00 放棄等待，轉去判斷是不是臨時休市。</p>
+      <p class="why">17:00 是因為兩張表正常 16:30 前會發布；19:00 留了兩個半小時的緩衝，同時離隔天開盤還很遠，有人能處理。這兩個時間應該和策略團隊對齊他們的 deadline。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q4</span><span>為什麼 sensor 用 reschedule，不用 poke 或 deferrable？</span></summary><div class="ans">
+      <p class="say">poke 會一直佔著 worker slot，等三小時就佔三小時。reschedule 每次檢查完就釋放 slot，一天一個 DAG 最划算。deferrable 在有大量 sensor 時更省資源，但要多跑 triggerer、寫 async 程式，這個規模不需要。</p>
+      <p class="why">如果之後要等幾十個資料源，就值得改 deferrable。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q5</span><span>失敗要重試，為什麼有些 task 不重試？</span></summary><div class="ans">
+      <p class="say">重試只對暫時性錯誤有用。擷取遇到網路錯誤或限流，重試 3 次、指數退避。稽核失敗、欄位改名、確認缺資料，這些是資料本身的問題，重抓同一份資料結果一樣，所以轉成 AirflowFailException 直接失敗告警，不浪費時間、也不重複打證交所。</p>
+      <p class="why">題目要求「重試用盡要告警」：task 層的 on_failure_callback 在重試用盡（或 AirflowFailException）時觸發。另外 DAG 層也有 callback，整個 run 逾時這種 task 不會回報的失敗也會告警。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q6</span><span>為什麼 max_active_runs=1？補一年資料會不會很慢？</span></summary><div class="ans">
+      <p class="say">價格連續性檢查要讀前一個交易日的 Silver，所以日子必須照順序寫入。一天大約 13 秒，加上對證交所每次請求間隔 3 秒，補一年約 250 個交易日，大概一小時內，可以接受。</p>
+      <p class="why">副作用是卡住的 run 會擋住隔天，所以加了 8 小時的 dagrun_timeout（PR #1）。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q7</span><span>為什麼用 CronTriggerTimetable？logical date 是哪一天？</span></summary><div class="ans">
+      <p class="say">我要 15:30 觸發、處理的就是當天的資料。舊的 data-interval 語意是在區間結束時跑「上一個區間」，對每日收盤資料很容易搞錯日期。CronTriggerTimetable 的 logical date 就是觸發時間，所以排程的那天就是交易日。</p>
+      <p class="why">手動指定日期時用 conf 的 <code>trade_date</code>，覆蓋排程日期。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q8</span><span>19:00 之後證交所才發布，怎麼辦？</span></summary><div class="ans">
+      <p class="say">19:00 時如果只出了一份，代表市場有開、只是晚，直接失敗告警。兩份都還沒出，就問 MI_5MINS：那天有開盤，就會有盤中紀錄，所以一樣失敗告警，不寫入任何東西。值班的人確認資料出來後，用 trade_date 參數手動觸發一次就好，寫入是冪等的。</p>
+      <p class="why">設計的底線是「不確定就不寫、一定告警」，而不是「盡量自動處理」。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q9</span><span>Airflow 3 的 Asset-driven scheduling 有用嗎？</span></summary><div class="ans">
+      <p class="say">有用，但用在 ETL 的出口，不是拿來拆內部。Gold 發布成功時可以發出一個以 trade_date 為 key 的 partitioned asset（Asset Partitions 在 Airflow 3.2 推出；3.3 的 RollupMapper 能等齊一週或一個月的 partition），因子和 ML 的 DAG 訂閱它，資料真的好了才跑，不用拿 cron 猜時間。每天這條 Write-Audit-Publish 鏈不拆：三張 Silver、跨表稽核和 Gold 是一個單位，拆成各自觸發的 asset，就會出現「行情新、法人舊」的中間狀態。</p>
+      <p class="why">Asset 回答的是「下游什麼時候該跑」，WAP 回答的是「什麼時候可以發布」，兩件事分開設計。不要說成 Airflow 借鏡 Dagster：Airflow 的文件沒有這樣寫。</p>
+    </div></details>
+  </div>
+
+  <div class="qa-group">
+    <h3>資料品質與清洗</h3>
+    <details class="qa"><summary><span class="q">Q10</span><span>筆數檢查之外，你怎麼知道資料是「對的」？</span></summary><div class="ans">
+      <p class="say">最強的是跨日勾稽：今收減漲跌必須等於昨收。這條抓得到筆數對、價格錯的問題，例如欄位錯位、小數點位移、正負號解析錯。真實資料每天約 1,360 檔參與，0 筆不符。另外還有法人內部加總、跨表一致性，公司行動在同一列內勾稽前收、權值+息值和參考價。</p>
+      <p class="why">筆數檢查只能保證「量」，連續性檢查才保證「值」。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q11</span><span>除權息、停牌、新上市，連續性檢查不會誤報嗎？</span></summary><div class="ans">
+      <p class="say">證交所標 X（不比價）的排除；除權息日改用除權息表的開盤競價基準；新上市和前一天沒收盤價的，沒有比較基準，自然不比。還有一個是用真實資料才發現的：颱風休市那天除息的股票，會在下一個交易日生效而且不標 X，所以除權息事件要抓「前一個交易日之後到今天」的區間。</p>
+      <p class="why">10/23 颱風日除息的 2028、6931，在 10/27 用開盤競價基準計算漲跌。只看當天事件的話，這兩檔會被誤報。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q12</span><span>門檻 900、500、85% 怎麼來的？</span></summary><div class="ans">
+      <p class="say">這些是底線，不是預期值。正常日行情約 1,390 檔、法人 1,340 檔、涵蓋率 96–97%。底線的用途是抓「只發布一半」這種大問題，又不會因為正常波動誤擋。上線後我會改成依歷史分布的動態門檻，例如低於前 20 日中位數的 90% 才擋。</p>
+      <p class="why">固定門檻在長期一定會過時，例如上市家數持續增加；動態門檻要配合足夠的歷史資料。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q13</span><span>為什麼價格用 Decimal，不用 float？</span></summary><div class="ans">
+      <p class="say">float 存不準十進位小數，例如 0.1 加 0.2 不等於 0.3。連續性檢查要求「完全相等」，用 float 會有誤差，只能改用容許誤差，等於放寬了檢查。Decimal(12,2) 剛好對應證交所兩位小數的報價。</p>
+      <p class="why">股數、金額用 int64；本益比 0.00 表示「無」，存 null。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q14</span><span>證交所改欄位名稱怎麼辦？</span></summary><div class="ans">
+      <p class="say">缺少預期欄位時直接失敗，不重試，告警請人看；多出新欄位只告警，照常處理既有欄位。這樣格式變更不會變成「某一欄安靜地全變 null」。</p>
+      <p class="why">對照表集中在 <code>contracts.py</code>，修正時只改一處，再用 fixture 補一個測試。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q15</span><span>為什麼不用 Great Expectations 這類工具？</span></summary><div class="ans">
+      <p class="say">這題的關鍵檢查是跨日連續性和跨表涵蓋率，這種業務規則在任何工具裡都要自己寫。自己寫的 Check 清單沒有額外依賴，每條都能單元測試，結果直接進 manifest。團隊變大、需要報表 UI 時，再遷移到 Great Expectations 或 Soda。</p>
+      <p class="why">工具的價值在規則管理和報表；規則本身的正確性還是得靠對資料的理解。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q16</span><span>為什麼不用 Pandera，或 DuckDB 的 SQL 斷言？</span></summary><div class="ans">
+      <p class="say">檢查已經是宣告式的：每條是一個 Polars 表達式，回傳違規的列，不是一堆 if-else，結果直接寫進 manifest。Pandera 可以把單表契約標準化，例如型別、null、主鍵、OHLC 範圍，這部分換過去合理；但跨表涵蓋率、跨日連續性、公司行動這些規則，在 Pandera 裡還是要自訂。DuckDB 斷言則是為了檢查再引入第二個引擎，資料本來就在 Polars 裡。</p>
+      <p class="why">選工具看它省掉哪一段；這題最有價值的規則，正好是工具給不了的那一段。</p>
+    </div></details>
+  </div>
+
+  <div class="qa-group">
+    <h3>Iceberg 與版本</h3>
+    <details class="qa"><summary><span class="q">Q17</span><span>為什麼用 Iceberg，不直接放 parquet？</span></summary><div class="ans">
+      <p class="say">三個 parquet 做不到的事：第一，每次寫入是一個 snapshot，能回答「上週二早上這張表長什麼樣」；第二，寫入是原子的，重寫某一天時，讀的人不會讀到一半；第三，能 rollback、能加欄位而不重寫舊資料。這三件剛好對應題目的需求：查當時內容、修正不重複、寫錯能回。</p>
+      <p class="why">原理是 catalog 裡一個指向 metadata 檔的指標，commit 就是原子地把指標換到新的 metadata。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q18</span><span>Partition 為什麼按日？不會小檔嗎？</span></summary><div class="ans">
+      <p class="say">按日的好處是修正一天就是原子地換掉那一天的檔案，snapshot 上看得到刪 1,388、加 1,388，正好是題目說的 overwrite partition，也不用額外套件。小檔我量過：500 個交易日、每天一次 commit，按日是 500 個檔；只改按年、不 compaction，還是 500 個檔，單日查詢反而從 9.5 ms 變 150 ms。檔案數是 commit 次數決定的，不是分區粒度。效益來自 compaction：按年加 compaction 剩 2 個檔，讀全部從 531 ms 降到 10 ms。所以回補多年歷史後，用 partition evolution 改按年，加每週 compaction。</p>
+      <p class="why">按年的意義是讓 compaction 能把一年合成一個檔（compaction 不跨分區）；partition evolution 只改 metadata，舊檔不重寫。按股票切會變成幾十萬個小 partition，而查詢通常是某天全部股票。完整數字在 <a href="#iceberg">05</a>。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q19</span><span>重抓同一天，怎麼做到不重複又保留兩版？</span></summary><div class="ans">
+      <p class="say">寫入一律是「把那一天整個換掉」：overwrite 加上 trade_date 等於那天的條件。同一天永遠只有一份，所以不重複；修正前的內容留在上一個 snapshot，所以兩版都查得到。內容指紋（排除 run_id、時間等欄位後的 sha256）和目前版本一樣就跳過，重跑不會產生多餘版本；修好 parser 後重跑，內容變了就會寫新版。</p>
+      <p class="why">PyIceberg 會在同一次 metadata commit 裡產生 delete 和 append 兩個 snapshot。現場示範 <code>make demo-correct</code>：改了 2330 的成交股數後，表裡仍是 1,388 檔、沒有重複，前後兩個 snapshot 各自查得到舊值和新值。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q20</span><span>為什麼用 overwrite partition，不用 MERGE？</span></summary><div class="ans">
+      <p class="say">證交所修正時是重新發布一整天，來源本來就是「整天的完整快照」，整天替換最簡單也最不容易錯。MERGE 適合來源只給變動列的情況，例如 CDC，而且還要處理「某檔被刪掉」的情況。</p>
+      <p class="why">題目也寫「MERGE 或 overwrite partition」都可以。如果之後有逐筆更新的資料源，再引入 MERGE（例如用 Spark 或 Trino）。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q21</span><span>time travel 的「時間」是什麼時間？怎麼回答「上週算訊號用的是哪一版」？</span></summary><div class="ans">
+      <p class="say">是 commit 時間，不是交易日。最精確的做法是不靠時間：每次執行的 manifest 記下合併表的 snapshot id，策略團隊算訊號時引用這個 id，之後用它 time travel，就能拿到一模一樣的資料。用時間查，則是「那個時間點最新的一版」。</p>
+      <p class="why">對回測特別重要：用修正後的資料回測，等於用了當時拿不到的資訊（look-ahead）。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q22</span><span>rollback 之後，原本的資料去哪了？</span></summary><div class="ans">
+      <p class="say">還在。rollback 只是把 current 指標指回舊的 snapshot，被退掉的 snapshot 和資料檔都沒刪，必要時可以再指回去。真正刪除要等 expire snapshots 和清理孤兒檔案。</p>
+      <p class="why">所以 rollback 是幾乎零成本的止血動作，這也是異常處理時「先退回上一版」能很快做到的原因。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q23</span><span>snapshot 會無限長大嗎？清掉不就查不到上週版本？</span></summary><div class="ans">
+      <p class="say">要定期 expire 舊 snapshot、合併小檔、清孤兒檔。這和「查上週版本」確實有衝突，所以保留期要跟策略團隊對齊，例如至少 90 天；被訊號引用過的版本打 tag，tag 有自己的保留期，不會被一般清理刪掉。目前專案還沒設保留政策，這是上線前要補的。</p>
+      <p class="why">維護通常排程用 Trino 的 <code>ALTER TABLE … EXECUTE expire_snapshots / optimize</code> 或 Spark 的維護程序執行。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q24</span><span>兩個人同時寫同一張表會怎樣？</span></summary><div class="ans">
+      <p class="say">Iceberg 用樂觀並行控制：每個 writer 寫好自己的檔案，commit 時在 catalog 做 compare-and-swap，後到的發現指標變了就失敗重試。SQLite catalog 同時只能一個 writer，所以我讓三張 Silver 表由同一個 task 依序寫入。多人或多個 pipeline 時換 Postgres 或 Glue，這個我在大資料配置驗證過了。</p>
+      <p class="why">寫入不同 partition 的兩個 commit 通常能自動重新套用，衝突機率低。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q25</span><span>Iceberg、Delta Lake、Hudi 怎麼選？</span></summary><div class="ans">
+      <p class="say">Iceberg 引擎中立，Spark、Trino、Flink、DuckDB、Athena、Snowflake 都能讀寫，而且有 PyIceberg，不用 JVM 就能在 Airflow 裡寫，這是我選它的主因。Delta Lake 在 Databricks 生態最完整；Hudi 強在高頻 upsert 和增量讀取，適合串流 CDC。這題每天批次寫一次，Iceberg 最合適。</p>
+      <p class="why">Iceberg 的 hidden partitioning 和 partition evolution 也讓「之後改切法」沒有成本。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q26</span><span>schema evolution 為什麼舊資料還能讀？改欄位名呢？</span></summary><div class="ans">
+      <p class="say">Iceberg 用欄位 ID 而不是欄位名稱追蹤欄位。加欄位時，舊的資料檔沒有這個 ID，讀出來就是 null，不用重寫。改名也只改 metadata，因為底層認的是 ID。如果是用名稱對應的 parquet，改名就等於舊資料那欄消失。</p>
+      <p class="why">示範 <code>make demo-evolve</code>：加欄位後，舊 snapshot 照樣能查，新欄位在舊資料上是 null。</p>
+    </div></details>
+  </div>
+
+  <div class="qa-group">
+    <h3>CI/CD 與部署</h3>
+    <details class="qa"><summary><span class="q">Q27</span><span>CI 檢查什麼？為什麼 DAG 要在正式 image 裡測？</span></summary><div class="ans">
+      <p class="say">兩個 job：一個跑清洗與稽核的測試，用錄好的真實證交所回應加上 25 種故意弄壞的版本，共 67 個，不連網，約 4 秒；另一個先 build 正式的 Airflow image，在裡面確認 DAG 能 import、沒有循環。在正式 image 裡測，才能抓到「我電腦有裝、production 沒裝」的套件問題和 Airflow 版本差異。</p>
+      <p class="why">測試用 fixture 而不是真的打 API，CI 才會穩定，不會因為證交所限流而變紅燈。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q28</span><span>CD 怎麼把 DAG 送到 Airflow？</span></summary><div class="ans">
+      <p class="say">本 repo 的 main 有 push、CI 成功後，自動觸發 CD；fork 送來的 PR 不會觸發。部署腳本先檢查 dags/ 不是空的、所有檔案能編譯，再把 DAG 和程式套件組成一包、寫上版本號，同步到 Airflow 掛載的資料夾，並保留每一版的壓縮檔方便回滾。GitHub 上這一包存成 artifact；本機用一行指令裝進去。上 AWS 時同一包用 OIDC 同步到 MWAA 的 S3。</p>
+      <p class="why">image 只裝第三方套件，程式透過掛載資料夾部署，所以改程式不用重 build image。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q29</span><span>為什麼 CD 不直接推到你的電腦？能不能全自動？</span></summary><div class="ans">
+      <p class="say">GitHub 的雲端 runner 連不到我的電腦。要全自動有三種做法：在本機跑 self-hosted runner，但這是公開 repo，別人的 PR 可能在我機器上執行程式，不安全；本機定時拉 CI 的產物；或直接上雲，merge 後自動同步到 MWAA。題目也說 CD 在本機模擬即可。</p>
+      <p class="why">Airflow 3 的 GitDagBundle 也能讓 Airflow 直接從 Git 拉 DAG，但會少掉「部署前檢查」那一道關。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q30</span><span>搬到 AWS，哪些要改、哪些不用？</span></summary><div class="ans">
+      <p class="say">要改的都是設定：catalog 換 Glue、資料路徑換 S3，都是環境變數；requirements 加 Glue 和 S3 的套件；CD 開啟 AWS 那個 job；告警改送 SNS 或 Slack。清洗、稽核、Iceberg 讀寫和 DAG 程式碼都不用改。這不只是理論：我把 catalog 換成 Postgres、資料換成 S3 相容儲存，pipeline 程式完全沒改就跑通，還用 Trino 查到了同樣的版本。</p>
+      <p class="why">關鍵設計是 <code>get_catalog</code> 是唯一知道 catalog 位置的函式，<code>storage.py</code> 用 pyarrow FileSystem，本機路徑和 <code>s3://</code> 是同一套呼叫。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q31</span><span>部署了壞版本，怎麼回滾？</span></summary><div class="ans">
+      <p class="say">每一版都有壓縮檔，解壓上一版到掛載資料夾就回去了，Airflow 自動重新載入；或者 revert 那個 commit，走一次正常的 CI/CD。資料面如果已經被壞版本寫錯，用 Iceberg rollback 退回寫入前的 snapshot。</p>
+      <p class="why">程式回滾和資料回滾是兩件事，兩件都要能做到。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q32</span><span>金鑰怎麼管？</span></summary><div class="ans">
+      <p class="say">repo 裡沒有任何金鑰。本機的 secret 在 .env 裡，由 make 在每台機器隨機產生、gitignore 擋住。上 AWS 用 GitHub OIDC 換臨時憑證，不存長期 key。pipeline 本身不需要任何第三方 API key：資料源是證交所公開 API，臨時休市也是問證交所。</p>
+      <p class="why">大資料配置裡的 S3 key 是只在本機容器之間有效的固定值，object store 不對外開 port，不是真的憑證。</p>
+    </div></details>
+  </div>
+
+  <div class="qa-group">
+    <h3>異常處理與營運</h3>
+    <details class="qa"><summary><span class="q">Q33</span><span>為什麼選情境二？</span></summary><div class="ans">
+      <p class="say">因為它最危險：沒有錯誤訊息、流程全綠，壞資料安靜地進到策略。情境一和三至少會有人發現，情境二要等策略出問題才會被發現。而且我用真實資料就重現了它：10/29 行情 1,388 檔、法人 1,340 檔，inner join 會少 48 檔。現在對帳失敗還會自動撤銷這次寫入，讀的人不會看到少了列的合併表。</p>
+      <p class="why">核心觀念：「成功」要包含資料檢查，不只是程式沒報錯。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q34</span><span>情境一（颱風日寫入空 snapshot），你的設計會發生嗎？發生了怎麼處理？</span></summary><div class="ans">
+      <p class="say">不會發生。「資料到了」要求筆數達到下限，空表根本不會進入擷取；寫入前也有筆數檢查；颱風日要兩份報表都 0 筆、MI_5MINS 也明確沒有盤中資料，才記成休市並略過，什麼都不寫。萬一真的發生：先 rollback 到前一個 snapshot、重建合併表、通知策略團隊；用 manifest 找出哪個 run 寫的；最後補上防線。</p>
+      <p class="why">預防的設計就是三道交易日關卡加上完整性定義。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q35</span><span>情境三（merge 後 DAG 全消失），你的設計會怎樣？</span></summary><div class="ans">
+      <p class="say">部署腳本會拒絕空的 dags/，而且 CI 要求 DAG 能 import，所以「整包變空」或「DAG 壞掉」都到不了 Airflow。如果還是發生，就解壓上一版壓縮檔，馬上恢復；同時回答策略團隊：資料寫在 Iceberg，已經寫入的都還在，今天的 run 恢復後會照常補上。</p>
+      <p class="why">rsync --delete 的特性是「目標會變得跟來源一樣」，所以空來源會清空目標，這正是需要防呆的原因。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q36</span><span>寫入後對帳失敗，資料不是已經進去了嗎？</span></summary><div class="ans">
+      <p class="say">commit 了，但不會留著。reconcile 發現筆數對不上，會在 task 失敗之前自動撤銷這次 run：每張表退回 run 之前的 snapshot，Gold 先、Silver 後；如果是第一次載入，就刪掉這次寫的列。manifest 記下 undone，然後失敗告警。測試把合併表截成 800 列：檢查擋下，每張表回到原本筆數；修好重跑是 1,388／1,388。剩下的限制是 commit 到撤銷之間讀得到；要完全消除，用 Iceberg branch：先寫 audit 分支，檢查過才 fast-forward 到 main。</p>
+      <p class="why">第一次載入的刪除會標上 <code>content_sha256 = "undone"</code>，否則修好後用同樣內容重跑，會被冪等檢查當成「內容沒變」而跳過。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q37</span><span>三張 Silver 表的寫入是原子的嗎？</span></summary><div class="ans">
+      <p class="say">每張表各自的 commit 是原子的，三張之間不是：Iceberg 本身沒有跨表交易。中途失敗會出現行情是新的、法人還是舊的。我的處理是合併表只在三張都寫完後才建；重跑是冪等的，會把缺的補齊；manifest 記錄每張表的版本，策略只讀合併表。需要真正跨表原子性時，可以用 Nessie 這類支援多表交易的 catalog。</p>
+      <p class="why">實務上，下游只讀一個「經過確認的出口」（Gold＋manifest），就能避開大部分跨表不一致的問題。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q38</span><span>臨時休市判斷錯了會怎樣？</span></summary><div class="ans">
+      <p class="say">要判成休市，三件事必須同時成立：已過 19:00 cutoff、行情和法人都是 0 筆、MI_5MINS 明確回「沒有資料」。其中任何一個來源答錯，結果只會是失敗並多告警一次，不會把交易日靜默略過。判成休市時，closures 檔記著 Bronze 裡原始回應的位置，隨時可以查證。</p>
+      <p class="why">原則是：自動判斷只能往安全的方向錯（不寫、告警），而且答案本身就是證據。</p>
+    </div></details>
+  </div>
+
+  <div class="qa-group">
+    <h3>設計取捨與延伸</h3>
+    <details class="qa"><summary><span class="q">Q39</span><span>題目裡你覺得不合理、或做得不一樣的地方？</span></summary><div class="ans">
+      <p class="say">五個。第一，題目是寫入後才做筆數檢查，我改成先稽核再寫入，失敗時正式表完全沒被污染。第二，寫入後的對帳失敗要自動撤銷，不能只告警：DAG 紅燈時，讀的人不該已經拿到壞的合併表。第三，交易日不能只靠行事曆，颱風假只能從「資料沒來」反推，再問交易所自己的盤中統計確認。第四，連續性檢查比筆數檢查更能抓錯。第五，staging parquet 定位成被稽核的對象，對外只開放 Iceberg。</p>
+      <p class="why">這五點都寫在 README §8，題目明確要求「直接提出並說明理由」。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q40</span><span>資料量變成一千倍，要改什麼？</span></summary><div class="ans">
+      <p class="say">儲存與 catalog 換成 S3 和多 writer 的 catalog，查詢用 Trino 或 Spark，這套我已經在 docker 裡跑通。partition 用 evolution 改按年並排程 compaction，實測讀全部從 531 ms 降到 10 ms。擷取如果變成逐筆成交，要平行化，寫入改用 Spark 或 Flink。DAG 結構和稽核邏輯不用變。</p>
+      <p class="why">現在的設計把「在哪裡存」「用什麼查」都留在設定裡，擴充是換元件，不是重寫。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q41</span><span>為什麼不用 LLM 判斷颱風假？</span></summary><div class="ans">
+      <p class="say">考慮過、也做過一版，收斂時拿掉。LLM 加 web search 讀新聞和公告，非確定性、要 API key、有成本，還可能被網頁內容誤導；它最多只能告訴我「新聞說停班」。人事行政總處公布的是台北市停班停課，不等於證交所休市。直接問交易所「那天有沒有成交」最準：MI_5MINS 是同一個資料源、結果確定、免金鑰，回應本身就能存成證據。</p>
+      <p class="why">原則是：能用確定性的一手資料回答，就不用機率性的二手推論。LLM 適合讀格式不固定的內容，這裡沒有這種需要。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q42</span><span>這條管線最大的弱點是什麼？</span></summary><div class="ans">
+      <p class="say">我會說三個：對帳失敗雖然會自動撤銷，但 commit 到撤銷之間讀得到；snapshot 還沒有保留政策；證交所事後修正不會被自動發現，要手動重跑。三個都有明確的改進方向：Iceberg branch 做 WAP、訂保留期並打 tag、T+1 自動重抓比對。</p>
+      <p class="why">完整清單在本手冊 <a href="#limits">12</a>。回答時挑跟對方關心的面向最相關的講。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q43</span><span>為什麼合併表用 LEFT JOIN？沒有法人資料的填 0 不會誤導嗎？</span></summary><div class="ans">
+      <p class="say">T86 只列有法人交易的股票，inner join 會丟掉股票。LEFT JOIN 從行情出發，筆數永遠等於行情。填 0 的同時有 institutional_reported 欄位標記，策略可以區分「法人真的零交易」和「這檔沒有出現在 T86」。</p>
+      <p class="why">寫入後對帳兩條：合併表筆數等於行情筆數；有法人資料的列數等於法人筆數。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q44</span><span>如果你加入一家還在手動下載的公司，怎麼讓大家信任自動化？</span></summary><div class="ans">
+      <p class="say">平行比對。新管線上線後和手動下載同時跑兩週，每天比對，差異逐筆解釋。同時讓訊號報告附上資料版本號，讓「哪一版資料」變成可以查證的事實。信任建立後，再由主管拍板停用手動流程。</p>
+      <p class="why">這是報告第 4 頁落地計畫的核心。</p>
+    </div></details>
+  </div>
+
+  <div class="qa-group">
+    <h3>還原權值與公司行動</h3>
+    <details class="qa"><summary><span class="q">Q45</span><span>公司行動不在題目範圍，為什麼要做？</span></summary><div class="ans">
+      <p class="say">兩個原因。第一，擋寫入的連續性檢查需要它：事件生效日的漲跌是相對開盤競價基準，不是昨收。10/23 颱風日除息的 2028、6931 在 10/27 生效，沒有事件表，這兩檔會讓檢查失敗、整天擋下。第二，策略團隊算報酬需要調整因子。所以留下來，但收窄到只用證交所公布的值：三張報表、因子 = 參考價 ÷ 事件前收盤、還原價查詢時才算。</p>
+      <p class="why">加東西要有理由，也要有邊界：不抓明細頁重算、不接第三方、不做人工審核流程。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q46</span><span>為什麼不直接買現成的還原價？</span></summary><div class="ans">
+      <p class="say">現成的還原價是黑盒，資料源算錯時我們無從得知，也多一個外部依賴。證交所公布的參考價就是市場交易的基準，因子 = 參考價 ÷ 事件前收盤，直接從源頭取；原始回應存在 Bronze，每個因子都查得到出處，也都過了讀取檢查。</p>
+      <p class="why">曾經用 FinMind 做第三方交叉比對，收斂時拿掉：參考價是證交所定義的，第三方的值只是轉述，多一個依賴換不到新的資訊。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q47</span><span>調整因子怎麼驗證？為什麼誤差是「捨去到分」？</span></summary><div class="ans">
+      <p class="say">驗的是我們讀對沒有。四條：因子在合理範圍，除權息 (0, 1]、減資和分割 (0, 100]，超出就擋；非 X 日收盤減漲跌要等於開盤競價基準，也擋；TWT49U 同一列裡，前收減權值+息值、捨去到分要等於參考價；事件前收要等於我們自己 Silver 的前一日收盤，這兩條告警。錄到的 94 筆除權息全部成立，參考價差 1 分也抓得到。</p>
+      <p class="why">容忍度要從資料怎麼產生推出來：證交所是捨去到分（2330 那一列 1,845 − 6.000035 = 1,838.999965，公布 1,838.99），所以條件是 0 ≤ 差 &lt; 0.01，用 decimal 精確計算。「誤差一檔」在千元以上是 5 元，太鬆。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q48</span><span>為什麼不從明細頁用官方公式驗算參考價？</span></summary><div class="ans">
+      <p class="say">做過，收斂時拿掉。參考價是證交所自己的定義，市場就照它交易；就算公式算出來不同，生效的還是公布值。所以要驗的是「我們讀對沒有」，不是「證交所算得對不對」。公式驗算要每筆事件多抓明細頁，還要處理現金增資、捨去這些細節，複雜度高、價值低。同一列三個欄位互相勾稽，加上交易所自己的價格序列（收盤減漲跌等於開盤基準），就能抓到讀錯欄和解析錯誤。</p>
+      <p class="why">驗證要對準會出錯的地方，也就是我們的解析。驗算別人的定義，對不上時也只能照公布值用。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q49</span><span>為什麼存原始價加因子，不存調整後的價格？</span></summary><div class="ans">
+      <p class="say">調整後價格每次除權息都要改寫整段歷史，舊 snapshot 全部和今天對不上，「上週訊號用哪一版」就答不出來。存原始價和每日因子，任何一個版本都能在查詢時算出當時的還原價；因子錯了也只改一筆。</p>
+      <p class="why">這是把事實（證交所印的價格）和衍生值（還原價）分開存。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q50</span><span>前復權和後復權，回測該用哪個？</span></summary><div class="ans">
+      <p class="say">報酬率兩者一樣。拿價格水準做特徵時用後復權：第一天固定、往後調整，新的一天加進來不會改變過去的數字。前復權用之後的因子調整過去，價格水準含有未來資訊。</p>
+      <p class="why">例如「突破 100 元」這種條件，在前復權下會因為之後的除息而改變。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q51</span><span>還原股價用 DuckDB 的 view 不行嗎？</span></summary><div class="ans">
+      <p class="say">兩個問題。第一，DuckDB 的 Iceberg extension 能接 REST catalog、S3 Tables 和（實驗中的）Glue，接不到我們的 SQL catalog。第二，更根本的是固定的前復權 view 本身帶 look-ahead：未來一有除權息，過去的價格水準就全部改變。point-in-time 的只有後復權，或帶 as-of 參數的計算。給 SQL 使用者的話，Trino view 用 <code>exp(sum(ln(adj_factor))) over (partition by stock_id order by trade_date)</code> 累乘做後復權就好。</p>
+      <p class="why">還原價是衍生值，用 view 或查詢時算都可以；重點是方向：後復權加進新的一天，舊的數字不會變。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q52</span><span>公司行動的檢查對不上，為什麼只告警、不擋住整天？</span></summary><div class="ans">
+      <p class="say">公司行動是加值欄位；行情和法人才是策略團隊明天一定要用的。兩條交叉比對對不上時，照證交所公布值入庫並告警，讓人去看，不讓 1,390 檔都延遲。因子超出範圍不一樣，那是確定的解析錯誤，所以擋。</p>
+      <p class="why">擋或不擋看兩種代價：每天誤擋的檢查會讓人開始忽略告警，而證交所公布值本來就是生效的值。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q53</span><span>有疑問的公司行動，為什麼不讓交易員審核？</span></summary><div class="ans">
+      <p class="say">做過一版，收斂時拿掉。它要另一個 DAG、Airflow 的表單、只新增的審核紀錄表和具名登入，遠超過題目範圍。收斂後也沒有需要人裁決的「多方對不上」：只用證交所公布值，它就是生效的值；我們的檢查只驗讀取，對不上多半是解析問題，該修程式再重跑，而不是讓人填一個數字。所以現在是告警，由工程師看。</p>
+      <p class="why">人工流程要放在真的需要判斷的地方。真的要做時，紀錄要只新增不修改，「誰、何時」取自登入身分，不能自己填。</p>
+    </div></details>
+  </div>
+
+  <div class="qa-group">
+    <h3>上雲與運算引擎</h3>
+    <details class="qa"><summary><span class="q">Q54</span><span>之後要大量 GPU 訓練，Polars、Spark、Trino、DuckDB 選哪個？</span></summary><div class="ans">
+      <p class="say">Polars 為主。日頻 20 年才 700 萬列，單機就裝得下，瓶頸在 GPU 訓練不在資料處理；Polars 有 GPU 引擎，和 PyTorch、XGBoost 之間走 Arrow，少一次複製；清洗也已經用 Polars，研究和 production 算法一致。Trino 是給人查資料的 SQL 服務，AWS 上換 Athena；Spark 留給逐筆成交這種單機放不下的量；DuckDB 當 notebook 裡的 SQL 工具。</p>
+      <p class="why">選引擎看資料量和瓶頸在哪，不看名氣。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q55</span><span>基因演算法挖因子，運算怎麼安排？</span></summary><div class="ans">
+      <p class="say">瓶頸是同時評估上萬個候選公式。把價格、成交量整理成「日期 × 股票」的 GPU 張量，候選公式用 PyTorch 運算批次評估，Rank IC 也在 GPU 上算，資料只搬一次。訓練資料用指定的 Iceberg snapshot 讀取，結果可以重現。</p>
+      <p class="why">這一段 DataFrame 引擎反而慢，因為每個公式都是一次完整的面板運算。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q56</span><span>搬到 AWS（S3＋Glue），程式要改哪些？</span></summary><div class="ans">
+      <p class="say">大部分是設定：catalog 類型、warehouse、資料路徑三個環境變數，加上 Glue 和 S3 的套件；告警改送 SNS 或 Slack；登入換 MWAA 的 IAM／SSO。清洗、稽核、對帳與撤銷、還原價、Iceberg 讀寫和 DAG 都不用改。</p>
+      <p class="why">S3＋Postgres catalog 已經在 docker 裡不改程式跑通；Bronze 寫 S3 是設計上支援，還沒實測，要照實說。</p>
+    </div></details>
+    <details class="qa"><summary><span class="q">Q57</span><span>AWS 上用 MWAA 要注意什麼？</span></summary><div class="ans">
+      <p class="say">版本：本專案在 Airflow 3.3 開發，要確認 MWAA 提供的版本，CI 的 DAG 測試也改用同版本的 image。部署：CD 的 deploy-aws job 用 OIDC 把同一包 bundle 同步到 MWAA 的 S3。查詢：Trino 換 Athena，接同一個 Glue catalog。</p>
+      <p class="why">這些都在設定或部署層，pipeline 本身不用改。</p>
+    </div></details>
+  </div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="gloss">
+  <h2><span class="n">14</span>名詞表</h2>
+  <dl class="gloss">
+    <div><dt>WAP</dt><dd>Write-Audit-Publish：先寫暫存、稽核、通過才發布。</dd></div>
+    <div><dt>Bronze／Silver／Gold</dt><dd>原始層／正式清洗層／給使用者的合併層（medallion 架構）。</dd></div>
+    <div><dt>snapshot</dt><dd>Iceberg 表在某次 commit 後的完整狀態，有唯一 id。</dd></div>
+    <div><dt>manifest（Iceberg）</dt><dd>記錄資料檔清單與統計的 metadata 檔。</dd></div>
+    <div><dt>manifest（本專案）</dt><dd>每次執行的收據：snapshot id、筆數、檢查結果。</dd></div>
+    <div><dt>catalog</dt><dd>記錄「每張表目前的 metadata 在哪」的服務；commit 在這裡原子完成。</dd></div>
+    <div><dt>time travel</dt><dd>用 snapshot id 或時間查表的過去狀態。</dd></div>
+    <div><dt>hidden partitioning</dt><dd>查詢不用知道分區欄位怎麼切，Iceberg 自動裁剪。</dd></div>
+    <div><dt>copy-on-write／merge-on-read</dt><dd>更新時改寫整個檔案／寫刪除檔、讀時合併。</dd></div>
+    <div><dt>idempotent（冪等）</dt><dd>同樣的輸入重跑幾次，結果都一樣。</dd></div>
+    <div><dt>short_circuit</dt><dd>回傳 False 就讓下游全部略過、run 仍成功的 task。</dd></div>
+    <div><dt>sensor（reschedule）</dt><dd>定時檢查條件；兩次檢查之間不佔 worker。</dd></div>
+    <div><dt>fail closed</dt><dd>不確定時往安全的方向失敗：不寫入、告警。</dd></div>
+    <div><dt>OIDC</dt><dd>GitHub Actions 用短期身分向 AWS 換臨時憑證，不存長期 key。</dd></div>
+    <div><dt>前復權／後復權</dt><dd>以最後一天／第一天為基準調整價格；報酬率相同，價格水準不同。</dd></div>
+    <div><dt>調整因子（adj_factor）</dt><dd>參考價 ÷ 事件前收盤；同一天有多個事件就相乘。</dd></div>
+    <div><dt>內容指紋</dt><dd>排除 run_id、寫入時間等欄位後資料的 sha256；和目前版本相同就不寫新版本。</dd></div>
+    <div><dt>undo（撤銷本次 run）</dt><dd>對帳失敗時，把這次 run 寫過的表退回 run 之前的 snapshot（首次載入則刪除），Gold 先。</dd></div>
+    <div><dt>MI_5MINS</dt><dd>證交所每 5 秒的委託成交統計；開盤日 09:00–13:30 都有紀錄，用來確認臨時休市。</dd></div>
+    <div><dt>compaction／partition evolution</dt><dd>把小檔合併成大檔（不跨分區）／改變分區方式，只改 metadata、舊檔不重寫。</dd></div>
+    <div><dt>look-ahead</dt><dd>回測用了當時拿不到的資訊，例如事後修正過的資料。</dd></div>
+  </dl>
+</section>
+</main>
+</div>
+
+<script>
+(function () {
+  var all = function () { return document.querySelectorAll("details.qa"); };
+  var openBtn = document.getElementById("qa-open");
+  var closeBtn = document.getElementById("qa-close");
+  if (openBtn) openBtn.addEventListener("click", function () { all().forEach(function (d) { d.open = true; }); });
+  if (closeBtn) closeBtn.addEventListener("click", function () { all().forEach(function (d) { d.open = false; }); });
+})();
+</script>
+
+</body></html>

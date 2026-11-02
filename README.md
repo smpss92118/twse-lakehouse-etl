@@ -375,6 +375,7 @@ make trino-sql SQL="SELECT trade_date, close, adj_factor,
 | 變更走 PR：[#2](https://github.com/smpss92118/twse-lakehouse-etl/pull/2) S3 + Postgres catalog + Trino 配置 | [CI on PR](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41055269301)（`unit-tests` + `dag-integrity`） | success |
 | merge 到 main 後：CI → CD（`workflow_run` 觸發，打包 `airflow-dags-<sha>` artifact；`deploy-aws` 未啟用所以 skipped） | [CI](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41057397362) → [CD](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41057539182) | success |
 | [#5](https://github.com/smpss92118/twse-lakehouse-etl/pull/5) 收斂到題目範圍（改 DAG）→ merge → main 的 CI → CD | [CI on PR](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41304303953) → [CI](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41304530835) → [CD](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41304617177) | success |
+| [#6](https://github.com/smpss92118/twse-lakehouse-etl/pull/6) 公司行動降級、CLI 也擋 19:00、首批 TWSE 呼叫重試（改 DAG）→ merge → main 的 CI → CD | [CI on PR](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41310948376) → [CI](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41311133145) → [CD](https://github.com/smpss92118/twse-lakehouse-etl/actions/runs/41311221857) | success |
 
 CD 的觸發條件：上游 CI 必須是**本 repo** `main` 的 **push** 且成功（或手動 `workflow_dispatch`）。
 fork 的 PR、或任何分支名叫 main 的外部分支，都不會觸發部署。

@@ -1,0 +1,539 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>台股收盤資料管線</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column in presentation order (flow, decisions, incident, rollout, demo);
+   a daily "receipt" slip opens the page; Taiwan convention colors: red = up/ok-to-trade, green = down. */
+:root {
+  --paper: #f5f7f9;
+  --sheet: #ffffff;
+  --ink: #14202b;
+  --muted: #566573;
+  --line: #d8dfe6;
+  --accent: #1c4f8c;
+  --accent-soft: #e6eef8;
+  --up: #c4313a;
+  --down: #17804a;
+  --warn: #a8661a;
+  --warn-soft: #fbf1e4;
+  --font-display: "Noto Serif TC", "Songti TC", serif;
+  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e151c; --sheet: #151f29; --ink: #e5ecf2; --muted: #94a3b1; --line: #263441;
+    --accent: #82b2ea; --accent-soft: #18293b; --up: #f0686f; --down: #4cc483;
+    --warn: #e2a654; --warn-soft: #2a2117; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e151c; --sheet: #151f29; --ink: #e5ecf2; --muted: #94a3b1; --line: #263441;
+  --accent: #82b2ea; --accent-soft: #18293b; --up: #f0686f; --down: #4cc483;
+  --warn: #e2a654; --warn-soft: #2a2117; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.75;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--paper); }
+.wrap { max-width: 980px; margin: 0 auto; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.3; margin: 0; }
+p { margin: 0; }
+.num, code, .mono { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+code { font-size: 0.86em; background: var(--accent-soft); padding: 0.1em 0.4em; border-radius: 4px; overflow-wrap: anywhere; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* nav */
+nav.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: var(--paper); border-bottom: 1px solid var(--line);
+  margin: 0 calc(-1 * max(16px, env(safe-area-inset-left, 0px)));
+  padding: 10px max(16px, env(safe-area-inset-left, 0px));
+}
+nav.top .wrap { display: flex; gap: 6px 18px; flex-wrap: wrap; align-items: baseline; }
+nav.top .brand { font-weight: 700; margin-right: auto; }
+nav.top a { text-decoration: none; color: var(--muted); font-size: 14px; }
+nav.top a:hover { color: var(--accent); }
+nav.top a .t { font-family: var(--font-data); font-size: 12px; opacity: 0.8; }
+
+/* hero */
+header.hero { display: grid; grid-template-columns: 1.15fr 1fr; gap: 40px; align-items: center; padding-block: 56px 40px; }
+.eyebrow { font-size: 13px; letter-spacing: 0.12em; color: var(--muted); }
+.hero h1 { font-size: clamp(30px, 4.6vw, 46px); font-weight: 900; margin-top: 10px; }
+.hero h1 em { font-style: normal; color: var(--accent); }
+.hero .lede { margin-top: 18px; color: var(--muted); max-width: 34em; }
+.promises { display: grid; gap: 10px; margin-top: 24px; padding: 0; list-style: none; }
+.promises li { display: grid; grid-template-columns: 1.6em 1fr; gap: 8px; }
+.promises b { color: var(--ink); }
+.promises .k { color: var(--accent); font-family: var(--font-data); font-weight: 600; }
+
+/* receipt */
+.receipt {
+  background: var(--sheet); border: 1px solid var(--line); border-radius: 6px;
+  padding: 20px 22px; font-family: var(--font-data); font-size: 13.5px; line-height: 1.7;
+  box-shadow: 0 10px 30px -18px rgba(20, 32, 43, 0.35);
+}
+.receipt .head { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px dashed var(--line); padding-bottom: 10px; margin-bottom: 10px; font-family: var(--font-body); }
+.receipt .head b { font-family: var(--font-display); font-size: 17px; }
+.receipt .row { display: flex; justify-content: space-between; gap: 12px; }
+.receipt .row span:first-child { font-family: var(--font-body); color: var(--muted); }
+.receipt .ok { color: var(--down); }
+.receipt .snap { border-top: 1px dashed var(--line); margin-top: 10px; padding-top: 10px; color: var(--muted); overflow-wrap: anywhere; }
+.receipt .foot { margin-top: 10px; font-family: var(--font-body); font-size: 12.5px; color: var(--muted); }
+
+/* sections */
+section { padding-block: 44px; border-top: 1px solid var(--line); }
+.sec-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; }
+.sec-head .page { font-family: var(--font-data); font-size: 13px; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 1px 10px; }
+.sec-head .time { font-size: 13px; color: var(--muted); }
+section h2 { font-size: clamp(24px, 3.2vw, 32px); }
+.sec-lede { color: var(--muted); margin-top: 8px; max-width: 46em; }
+
+/* flow chains */
+.flow-label { margin-top: 28px; font-size: 14px; font-weight: 700; color: var(--muted); letter-spacing: 0.06em; }
+ol.chain { list-style: none; padding: 0; margin: 12px 0 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; counter-reset: step; }
+ol.chain li {
+  position: relative; background: var(--sheet); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px 14px 14px; counter-increment: step; min-width: 0;
+}
+ol.chain li::before { content: counter(step); font-family: var(--font-data); font-size: 12px; color: var(--muted); }
+ol.chain li b { display: block; font-size: 16px; margin-top: 2px; }
+ol.chain li p { font-size: 14px; color: var(--muted); line-height: 1.6; margin-top: 4px; }
+ol.chain li .tag { display: inline-block; margin-top: 8px; font-family: var(--font-data); font-size: 11.5px; color: var(--accent); }
+ol.chain li.gate { border-color: var(--accent); background: var(--accent-soft); }
+ol.chain.deploy { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.callout {
+  margin-top: 18px; display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: start;
+  background: var(--warn-soft); border: 1px solid var(--warn); border-radius: 6px; padding: 14px 16px;
+}
+.callout .badge { font-family: var(--font-data); font-size: 12px; color: var(--warn); border: 1px solid var(--warn); border-radius: 4px; padding: 2px 8px; white-space: nowrap; }
+.callout p { font-size: 15px; }
+
+/* decisions */
+.decisions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 24px; }
+.decision { background: var(--sheet); border: 1px solid var(--line); border-radius: 6px; padding: 18px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.decision .q { font-size: 13px; color: var(--muted); }
+.decision h3 { font-size: 20px; }
+.decision ul { margin: 0; padding-left: 1.1em; display: grid; gap: 6px; font-size: 15px; }
+.decision .why { border-top: 1px solid var(--line); padding-top: 10px; font-size: 14.5px; }
+.decision .why b { color: var(--accent); }
+
+/* incident */
+.incident { display: grid; grid-template-columns: 1fr 1.25fr; gap: 28px; margin-top: 24px; align-items: start; }
+.bars { background: var(--sheet); border: 1px solid var(--line); border-radius: 6px; padding: 18px; display: grid; gap: 14px; }
+.bar { display: grid; gap: 4px; }
+.bar .lab { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+.bar .lab .num { font-weight: 600; }
+.bar .track { height: 14px; background: var(--accent-soft); border-radius: 3px; overflow: hidden; }
+.bar .fill { height: 100%; background: var(--accent); }
+.bar.bad .fill { background: var(--up); }
+.bar.bad .lab .num { color: var(--up); }
+.bar.good .fill { background: var(--down); }
+.bars .big { display: flex; align-items: baseline; gap: 10px; border-top: 1px dashed var(--line); padding-top: 12px; }
+.bars .big .num { font-size: 40px; font-weight: 600; color: var(--up); line-height: 1; }
+.bars .big p { font-size: 14px; color: var(--muted); }
+.steps3 { display: grid; gap: 14px; }
+.steps3 .s { display: grid; grid-template-columns: 5.5em 1fr; gap: 12px; }
+.steps3 .s h3 { font-size: 17px; }
+.steps3 .s ul { margin: 0; padding-left: 1.1em; font-size: 15px; display: grid; gap: 4px; }
+.steps3 .s.prevent h3 { color: var(--down); }
+.verdict { margin-top: 20px; font-family: var(--font-display); font-size: 19px; }
+
+/* rollout */
+.rollout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
+.phase { background: var(--sheet); border: 1px solid var(--line); border-radius: 6px; padding: 18px; min-width: 0; }
+.phase .when { font-family: var(--font-data); font-size: 13px; color: var(--accent); }
+.phase h3 { font-size: 19px; margin-top: 4px; }
+.phase ul { margin: 10px 0 0; padding-left: 1.1em; display: grid; gap: 6px; font-size: 15px; }
+.who { margin-top: 16px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.who div { border-top: 2px solid var(--accent); padding-top: 8px; font-size: 14.5px; min-width: 0; }
+.who b { display: block; }
+.who span { color: var(--muted); }
+
+/* demo */
+.table-wrap { overflow-x: auto; margin-top: 20px; }
+table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 15px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 13px; color: var(--muted); font-weight: 500; }
+td.kind { white-space: nowrap; font-size: 13px; color: var(--muted); }
+td code { white-space: nowrap; }
+
+/* glossary */
+dl.gloss { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 28px; margin-top: 20px; }
+dl.gloss div { display: grid; grid-template-columns: 7.5em 1fr; gap: 10px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+dl.gloss dt { font-weight: 700; }
+dl.gloss dd { margin: 0; color: var(--muted); font-size: 15px; }
+
+/* speaker notes */
+details.notes { margin-top: 22px; border: 1px solid var(--line); border-radius: 6px; background: var(--sheet); }
+details.notes summary { cursor: pointer; padding: 10px 14px; font-size: 14px; color: var(--muted); }
+details.notes summary:hover { color: var(--accent); }
+details.notes .body { padding: 2px 16px 14px; font-size: 15px; display: grid; gap: 10px; max-width: 48em; }
+
+footer { padding-block: 28px 56px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13.5px; }
+
+@media (max-width: 860px) {
+  header.hero { grid-template-columns: 1fr; padding-block: 36px 28px; }
+  ol.chain, ol.chain.deploy { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .decisions, .incident, .rollout { grid-template-columns: 1fr; }
+  .who { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  dl.gloss { grid-template-columns: 1fr; }
+}
+@media (max-width: 460px) {
+  ol.chain, ol.chain.deploy { grid-template-columns: 1fr; }
+  .steps3 .s { grid-template-columns: 1fr; gap: 4px; }
+  nav.top a .t { display: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
+</style>
+
+<nav class="top" aria-label="章節">
+  <div class="wrap">
+    <span class="brand">台股收盤資料管線</span>
+    <a href="#flow">1 流程 <span class="t">4′</span></a>
+    <a href="#decisions">2 決策 <span class="t">5′</span></a>
+    <a href="#adjusted">補充 還原價 <span class="t">2′</span></a>
+    <a href="#incident">3 異常 <span class="t">3′</span></a>
+    <a href="#rollout">4 落地 <span class="t">3′</span></a>
+    <a href="#demo">操作 <span class="t">5′</span></a>
+  </div>
+</nav>
+
+<div class="wrap">
+
+<header class="hero">
+  <div>
+    <p class="eyebrow">給交易策略團隊的每日資料</p>
+    <h1>收盤後資料<em>自己來</em>，<br>壞的<em>擋下來</em>，<br>每一版都<em>查得到</em>。</h1>
+    <p class="lede">每個交易日收盤後，系統自動抓證交所的收盤行情和三大法人買賣超，檢查無誤才寫進正式表，合併成一張表給策略用。不再手動下載，也能回答「上週算訊號時用的是哪一版資料」。</p>
+    <ul class="promises">
+      <li><span class="k">01</span><span><b>不會誤跑。</b>週末、國定假日跳過；颱風假這種臨時休市，證交所自己的盤中統計確認當天沒有成交才跳過，否則告警。</span></li>
+      <li><span class="k">02</span><span><b>壞資料進不了正式表。</b>24 項檢查，關鍵的 22 項任何一項不過，正式表完全不動；另外 2 項核對除權息資料，對不上就告警。寫入後對帳不過，這次寫入自動撤銷。</span></li>
+      <li><span class="k">03</span><span><b>每次寫入都是一個版本。</b>證交所修正資料時，新舊兩版都留著，寫錯能退回。</span></li>
+      <li><span class="k">04</span><span><b>還原價用證交所公布的數字。</b>除權息、減資、分割的調整比例直接取自證交所參考價，檢查我們讀得對不對；原始價格永遠不改，查詢時才算。</span></li>
+    </ul>
+  </div>
+  <div class="receipt" role="figure" aria-label="2026-10-29 的執行收據">
+    <div class="head"><b>每日收據</b><span>2026-10-29（四）</span></div>
+    <div class="row"><span>收盤行情</span><span class="num">1,388 檔</span></div>
+    <div class="row"><span>三大法人</span><span class="num">1,340 檔</span></div>
+    <div class="row"><span>合併表</span><span class="num">1,388 檔</span></div>
+    <div class="row"><span>寫入前檢查</span><span class="num ok">24 / 24 通過</span></div>
+    <div class="row"><span>寫入後對帳</span><span class="num ok">4 / 4 通過</span></div>
+    <div class="snap">版本號 daily_market_wide<br>snapshot 2669797306897740501</div>
+    <p class="foot">每天都會留一張這樣的收據。策略報告附上版本號，日後就能精確重現當天用的資料。</p>
+  </div>
+</header>
+
+<!-- 1. FLOW -->
+<section id="flow">
+  <div class="sec-head"><span class="page">第 1 頁</span><span class="time">4 分鐘</span></div>
+  <h2>每天收盤後，資料自己走完這條路</h2>
+  <p class="sec-lede">上排是資料怎麼來，下排是程式怎麼上線。藍色格子是「關卡」：沒通過就停下來告警，不會帶著問題往下走。</p>
+
+  <p class="flow-label">資料流　每個交易日 15:30 起</p>
+  <ol class="chain">
+    <li class="gate"><b>今天要開盤嗎</b><p>週末、國定假日直接跳過，不算失敗。</p><span class="tag">官方開休市表</span></li>
+    <li class="gate"><b>等證交所發布</b><p>每 10 分鐘看一次。17:00 還沒來就告警；19:00 判斷是臨時休市還是異常。</p><span class="tag">sensor</span></li>
+    <li><b>原樣保存原始檔</b><p>抓到的檔案原封不動存下來，永不覆蓋，隨時能重建。</p><span class="tag">Bronze</span></li>
+    <li><b>清洗</b><p>中文欄位轉英文，千分位、正負號、空值都處理成正確型別。</p><span class="tag">parquet</span></li>
+    <li class="gate"><b>24 項檢查</b><p>筆數、價格合理、昨收對得上、法人加總正確、除權息比例……關鍵的 22 項全過才放行。</p><span class="tag">audit</span></li>
+    <li><b>寫入正式表</b><p>每次寫入都是一個有編號的版本。</p><span class="tag">Iceberg snapshot</span></li>
+    <li><b>產出合併表</b><p>一檔股票一列：行情加上法人買賣超。</p><span class="tag">LEFT JOIN</span></li>
+    <li class="gate"><b>對帳、留收據</b><p>合併表筆數必須等於行情筆數，對不上就撤銷這次寫入；並記下用了哪些版本。</p><span class="tag">manifest</span></li>
+  </ol>
+
+  <div class="callout">
+    <span class="badge">真實案例</span>
+    <p>2026-10-23 薔琵颱風休市，官方行事曆上沒有這天，證交所的回應跟一般假日一模一樣。所以 19:00 行情和法人<b>兩份都沒有任何一筆</b>時，系統問證交所自己的盤中成交統計（MI_5MINS）：<b>證交所明確回答「沒有資料」才當休市</b>，記進休市紀錄、原始回應留在 Bronze 作證據，流程綠燈；有盤中成交或任何其他回答，一律當異常告警。實測：10-22 正常日 3,241 筆，10-23 和 2024-10-31 兩個颱風日都是「沒有資料」。</p>
+  </div>
+
+  <p class="flow-label">部署流　GitHub → Airflow</p>
+  <ol class="chain deploy">
+    <li><b>改程式</b><p>在分支上修改。</p></li>
+    <li><b>推上 GitHub</b><p>自動觸發檢查。</p></li>
+    <li class="gate"><b>自動檢查</b><p>清洗邏輯測試；流程能載入、沒有循環。</p><span class="tag">CI</span></li>
+    <li><b>審核後合併</b><p>進主線 main。</p></li>
+    <li class="gate"><b>自動打包</b><p>檢查通過才打包；空的包直接拒絕。</p><span class="tag">CD</span></li>
+    <li><b>Airflow 載入</b><p>新版本自動生效，舊版本保留可退回。</p></li>
+  </ol>
+
+  <details class="notes">
+    <summary>講稿（4 分鐘）</summary>
+    <div class="body">
+      <p>先講結論：資料每天自己來、壞了會擋下來、每一版都查得到。</p>
+      <p>上排是資料流。15:30 先判斷今天是不是交易日，是的話就等證交所發布。抓下來的原始檔原樣保存、永不覆蓋，任何時候都能從原始檔重建。清洗把中文欄位轉成英文、把千分位和正負號處理成正確型別。</p>
+      <p>重點是「24 項檢查」：關鍵的 22 項全部通過才會寫入正式表，任何一項失敗，正式表完全不動，策略團隊不會拿到壞資料。另外 2 項核對除權息資料有沒有讀對，對不上時照證交所公布值入庫並告警，不擋住整天的行情。寫入後每次都是一個版本，能回答「上週算訊號用的是哪一版」。最後產出合併表、對帳筆數，留下一張收據；對帳不過，這次寫入的每張表自動退回寫入前的版本。</p>
+      <p>橘色框是我用真實資料踩到的：10/23 颱風休市不在官方行事曆上。所以 19:00 兩份報表都沒資料時，問證交所自己的盤中統計：明確沒資料才當休市，否則告警。兩個條件都要成立，判錯的方向只會是多告警一次，不會靜靜少掉一天資料；離線重播錄好的資料時，沒錄到盤中統計的日子也一律當異常，不會因為找不到檔案被判成休市。為什麼不看人事行政總處或新聞：人事行政總處公布的是台北市停班，不等於證交所休市；問交易所「那天有沒有成交」，答案確定、免金鑰。</p>
+      <p>下排是部署：改程式、推上去自動檢查，通過才能合併；合併後自動打包送到 Airflow，空的包會被拒絕。</p>
+    </div>
+  </details>
+</section>
+
+<!-- 2. DECISIONS -->
+<section id="decisions">
+  <div class="sec-head"><span class="page">第 2 頁</span><span class="time">5 分鐘</span></div>
+  <h2>三個問題，三個決定</h2>
+  <p class="sec-lede">題目第一部分的三個規劃問題。每一張卡片的最後一行，是這個決定對策略團隊的意義。</p>
+
+  <div class="decisions">
+    <article class="decision">
+      <p class="q">問題 1　流程怎麼切、怎麼等資料</p>
+      <h3>一步做一件事，壞了只重跑那一步</h3>
+      <ul>
+        <li>判斷開盤有三道關：只排週一到五 → 官方開休市表 → 19:00 兩份都沒資料時，問證交所盤中統計是否臨時休市。</li>
+        <li>等資料：每 10 分鐘看一次，17:00 起告警，19:00 放棄並告警。</li>
+        <li>網路錯誤才重試；資料本身錯了重試也沒用，直接告警。</li>
+      </ul>
+      <p class="why"><b>對你：</b>資料晚到不會變成空表，問題會在開盤前被人看到。</p>
+    </article>
+    <article class="decision">
+      <p class="q">問題 2　為什麼用 Iceberg、怎麼不重複</p>
+      <h3>每次寫入都是一個查得到的版本</h3>
+      <ul>
+        <li>單純存檔案答不出「上週二早上這張表長什麼樣」；Iceberg 每次寫入都留一個版本。</li>
+        <li>依交易日分區：修正某一天，只動那一天。回補多年歷史後改按年＋定期合併小檔（實測見下）。</li>
+        <li>重抓同一天＝整天替換，不會重複；舊內容留在上一個版本。</li>
+        <li>內容完全相同就不寫，重跑不製造多餘版本；程式修好重跑，內容變了就留新版。</li>
+      </ul>
+      <p class="why"><b>對你：</b>訊號可以重現；資料寫錯，一個指令退回上一版。</p>
+    </article>
+    <article class="decision">
+      <p class="q">問題 3　怎麼測試、怎麼上線、怎麼上雲</p>
+      <h3>沒通過檢查的程式到不了 Airflow</h3>
+      <ul>
+        <li>自動檢查：67 個測試（含 25 種故意弄壞的資料），加上在正式 Airflow image 裡 2 個測試確認流程能載入、沒有循環。</li>
+        <li>只有本 repo 主線的檢查通過才自動部署；空的程式包直接拒絕。</li>
+        <li>搬上 AWS：主要改設定（資料位置、目錄服務）；告警、登入各改一處。</li>
+      </ul>
+      <p class="why"><b>對你：</b>改程式不會讓明天的資料突然消失。</p>
+    </article>
+  </div>
+
+  <p class="flow-label">分區實測　500 個交易日 × 1,390 檔，照 pipeline 的寫法每天一次覆寫，本機 SSD</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th></th><th>按日（現在）</th><th>按年，不合併小檔</th><th>按年＋合併小檔</th></tr></thead>
+      <tbody>
+        <tr><td>檔案數 / manifest 數</td><td class="num">500 / 500</td><td class="num">500 / 500</td><td class="num">2 / 1</td></tr>
+        <tr><td>每次寫入延遲（前 10 天平均 → 最後 10 天平均）</td><td class="num">20 → 322 ms</td><td class="num">22 → 449 ms</td><td class="num">—</td></tr>
+        <tr><td>讀全部（回測）</td><td class="num">531 ms</td><td class="num">528 ms</td><td class="num"><b>10 ms</b></td></tr>
+        <tr><td>單一股票全歷史</td><td class="num">581 ms</td><td class="num">659 ms</td><td class="num"><b>11 ms</b></td></tr>
+        <tr><td>單日</td><td class="num">9.5 ms</td><td class="num"><b>150 ms</b></td><td class="num">9.6 ms</td></tr>
+        <tr><td>最近 60 天</td><td class="num">86 ms</td><td class="num">189 ms</td><td class="num">10 ms</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="sec-lede">檔案數由寫入次數決定，不是分區粒度：只改成按年、不合併小檔，檔案一樣多，單日查詢反而變慢。效益來自合併小檔（compaction），按年分區是讓它能把一年合成一個檔。所以現在維持按日；歷史回補到多年時，改按年（只改 metadata，舊檔不重寫）、每週合併小檔、過期舊版本，被訊號引用過的版本先打 tag 保留。</p>
+
+  <details class="notes">
+    <summary>講稿（5 分鐘）</summary>
+    <div class="body">
+      <p><b>流程：</b>照「判斷交易日 → 等資料 → 抓兩張表 → 清洗 → 檢查 → 寫入 → 合併 → 對帳」切，每一步可以單獨重跑。判斷交易日有三道關，第三道是因為颱風假永遠不會出現在官方行事曆上：等到 19:00、兩份報表一筆都沒有，再問證交所的盤中統計，明確沒有成交才記成休市。等待時不佔運算資源，每 10 分鐘醒來看一次。重試只給網路錯誤；檢查失敗直接告警，因為重抓同一份壞資料不會變好。</p>
+      <p><b>Iceberg：</b>直接放檔案，回答不了「某個時間點這張表長什麼樣」，覆蓋檔案時讀的人還可能讀到一半。Iceberg 每次寫入是一個版本，可以查過去、可以退回、加欄位不用重寫舊資料。分區依交易日，因為修正是以一天為單位：修正一天就是原子地換掉那一天的檔案，版本上的增刪筆數一目了然，也正好是題目說的「覆寫分區」。重抓同一天就是整天替換，所以不會重複，修正前的內容留在上一個版本。內容跟上次完全相同就跳過；程式修好後重跑，內容變了就留新版。</p>
+      <p><b>分區實測：</b>代價是小檔，一天一張表只有約 72 KB。我量了 500 個交易日：檔案數由寫入次數決定，只改成按年分區不會變少，單日查詢還從 9.5 ms 變 150 ms；真正的效益來自合併小檔，讀全部從 531 ms 降到 10 ms，按年分區的作用是讓合併能把一年合成一個檔。所以回補多年歷史後才改：分區改按年（只改 metadata），每週用 Trino 的 optimize 合併（PyIceberg 0.12 還沒有這功能），再加上舊版本過期；被訊號引用過的版本先打 tag，才不會失去「當時用哪一版」。</p>
+      <p><b>部署：</b>自動檢查跑兩件事：67 個測試（用錄下來的真實證交所資料，加上 25 種故意弄壞的版本，不連網），以及在正式 Airflow image 裡用 2 個測試確認流程能載入、沒有循環。只有本 repo 主線的檢查通過才部署，別人 fork 送來的修改不會觸發；部署腳本拒絕空的程式包。搬到 AWS（S3 + Glue）主要是換資料位置和目錄服務的設定；另外告警改送 Slack 或 SNS、登入從本機的單一 admin 帳號改成 MWAA 的 IAM／SSO。清洗、檢查、對帳與撤銷、還原價的程式都不改，也不在程式裡放任何金鑰。</p>
+    </div>
+  </details>
+</section>
+
+<!-- EXTRA: ADJUSTED PRICES + REVIEW -->
+<section id="adjusted">
+  <div class="sec-head"><span class="page">補充</span><span class="time">2 分鐘</span></div>
+  <h2>還原價用證交所的數字，驗的是我們讀對沒有</h2>
+  <p class="sec-lede">除權息、減資、分割會讓股價跳一格。系統直接採用證交所公布的參考價算出調整比例，檢查我們有沒有讀錯；原始價格永遠不改，查詢時才算還原價。</p>
+
+  <div class="decisions">
+    <article class="decision">
+      <p class="q">為什麼要做</p>
+      <h3>連續性檢查和策略都需要它</h3>
+      <ul>
+        <li>題目範圍外，但除權息日的漲跌是相對參考價、不是昨收；沒有事件資料，會擋的連續性檢查就會誤報。</li>
+        <li>10-23 颱風日的除息照樣生效，在下一個交易日 10-27 才反映，所以事件抓「前一交易日之後到今天」。</li>
+        <li>策略團隊算報酬需要調整比例。</li>
+      </ul>
+      <p class="why"><b>對你：</b>0050 分割那天，圖上不會變成 −75%。</p>
+    </article>
+    <article class="decision">
+      <p class="q">怎麼驗證</p>
+      <h3>驗我們讀對沒有，不驗證交所的算術</h3>
+      <ul>
+        <li>只用證交所公布值：TWT49U 除權息、TWTAUU 減資、TWTCAU 分割。調整比例＝參考價 ÷ 事件前收盤。</li>
+        <li>比例超出合理範圍就擋（除權息只會讓價格變低）。</li>
+        <li>同一列「前收 − 權值+息值」捨去到分要等於參考價，精確到分：錄到的 94 筆全部成立，差 1 分也抓得到。事件前收要等於我們自己前一天的收盤。這兩項只告警。</li>
+      </ul>
+      <p class="why"><b>對你：</b>對不上時照證交所數字入庫並告警，不擋住其他一千多檔。</p>
+    </article>
+    <article class="decision">
+      <p class="q">怎麼存</p>
+      <h3>原始價格永遠不改</h3>
+      <ul>
+        <li>正式表存證交所印出的價格，加上每天的調整比例。</li>
+        <li>前復權、後復權都在查詢時才算；回測用後復權，第一天保持原價，之後的價格不受未來的除權息影響。</li>
+        <li>調整比例被修改時留下新版本，舊版本照樣查得到。</li>
+      </ul>
+      <p class="why"><b>對你：</b>「上週訊號用的是哪一版」永遠答得出來。</p>
+    </article>
+  </div>
+
+  <details class="notes">
+    <summary>講稿（2 分鐘）</summary>
+    <div class="body">
+      <p>還原價不在題目範圍內，加進來是因為兩件事需要它：連續性檢查遇到除權息日要用參考價，否則會誤報，例如 10/23 颱風日的除息在 10/27 才生效；策略團隊算報酬要調整比例。</p>
+      <p>參考價是證交所定義的，市場就照它交易，所以要驗的不是證交所算得對不對，而是我們讀對沒有。比例範圍會擋；同一列「前收減權值加息值、捨去到分」要等於參考價，事件前收要等於我們自己的前一日收盤，這兩項只告警。錄到的 94 筆全部成立，差一分錢也抓得到。非除權息日，「收盤減漲跌」等於開盤競價基準，交易所自己的價格序列也確認了事件，這條在連續性檢查裡會擋。</p>
+      <p>收斂到面試範圍時，我拿掉了原本的官方公式重算、第三方資料比對和交易員審核單：參考價本身就是交易所的定義，重算它等於在驗證交易所的算術，多出來的是維護成本；對不上時照證交所數字入庫並告警就夠了。</p>
+      <p>實測：2762 在 10/29 除息，10/28 收盤 80.00 × 0.977375 = 78.19，正好是官方除息參考價。</p>
+    </div>
+  </details>
+</section>
+
+<!-- 3. INCIDENT -->
+<section id="incident">
+  <div class="sec-head"><span class="page">第 3 頁</span><span class="time">3 分鐘</span></div>
+  <h2>合併表少了股票，流程卻顯示全部成功</h2>
+  <p class="sec-lede">我選異常情境二，因為它最危險：沒有任何錯誤訊息，壞資料安靜地進到策略。而且我用真實資料就重現了它。</p>
+
+  <div class="incident">
+    <div class="bars" role="figure" aria-label="2026-10-29 各表筆數">
+      <div class="bar"><div class="lab"><span>收盤行情</span><span class="num">1,388</span></div><div class="track"><div class="fill" style="width:100%"></div></div></div>
+      <div class="bar"><div class="lab"><span>三大法人</span><span class="num">1,340</span></div><div class="track"><div class="fill" style="width:96.5%"></div></div></div>
+      <div class="bar bad"><div class="lab"><span>合併表（只留兩邊都有的）</span><span class="num">1,340</span></div><div class="track"><div class="fill" style="width:96.5%"></div></div></div>
+      <div class="bar good"><div class="lab"><span>合併表（以行情為主，我們的做法）</span><span class="num">1,388</span></div><div class="track"><div class="fill" style="width:100%"></div></div></div>
+      <div class="big"><span class="num">−48</span><p>2026-10-29 當天三大法人都沒交易的 48 檔。合併方式選錯，它們會安靜消失，流程照樣是綠燈。</p></div>
+    </div>
+
+    <div class="steps3">
+      <div class="s"><h3>止血</h3><ul>
+        <li>系統自動撤銷：這次寫入的每張表退回寫入前的版本，合併表先退，再退行情和法人表；讀的人停在上一個正確版本。</li>
+        <li>通知策略團隊：當天資料延後，用到它的訊號先暫停。</li>
+        <li>修好後從保存的原始檔重跑，不必再打證交所。</li>
+      </ul></div>
+      <div class="s"><h3>找原因</h3><ul>
+        <li>看當天收據：原始檔、正式表、合併表各幾筆，斷在哪一層一眼就知道。</li>
+        <li>斷在合併：合併方式丟掉了沒有法人資料的股票。</li>
+        <li>斷在法人表：證交所只發布一部分，或代號格式不一致（0050 變成 50）。</li>
+      </ul></div>
+      <div class="s prevent"><h3>預防</h3><ul>
+        <li>合併以行情為主，沒有法人資料的股票標記出來，不刪除。</li>
+        <li>寫入前：法人資料涵蓋率低於 85% 就擋下（平常是 96–97%）。</li>
+        <li>寫入後：合併表筆數 ≠ 行情筆數，自動撤銷這次寫入，再失敗並告警。</li>
+        <li>股票代號一律當文字處理。</li>
+      </ul></div>
+    </div>
+  </div>
+  <p class="verdict">「成功」要包含資料檢查；檢查不過，已經寫進去的也要收回來。</p>
+
+  <details class="notes">
+    <summary>講稿（3 分鐘）</summary>
+    <div class="body">
+      <p>這題我選情境二，因為它最危險：沒有錯誤訊息，流程全綠，壞資料安靜地進到策略。這不是假設：10/29 行情 1,388 檔、法人 1,340 檔，差的 48 檔是當天三大法人都沒交易的股票。合併如果只留兩邊都有的，這 48 檔就消失了。</p>
+      <p>止血由系統先做：對帳不過，這次寫入的每張表退回寫入前的版本，合併表先退；如果是那張表第一次載入、沒有上一版可退，就刪掉這次寫的列。收據記下撤銷了什麼，然後任務失敗、告警。人要做的是通知策略團隊當天資料延後；原始檔都保存著，修好後直接重跑。實測：把合併表截成 800 筆，每張表都回到原本的筆數；修好後重跑，合併表和行情都是 1,388 筆。</p>
+      <p>找原因：每次執行都會留收據，記錄每張表用了哪個版本、各幾筆，比三個數字就知道斷在哪一層。</p>
+      <p>預防，這幾條都已經寫進系統：合併以行情為主；寫入前檢查涵蓋率；寫入後檢查合併表筆數必須等於行情筆數，不等就自動撤銷、失敗告警。流程不會是綠燈，讀的人也不會看到少了列的合併表。</p>
+    </div>
+  </details>
+</section>
+
+<!-- 4. ROLLOUT -->
+<section id="rollout">
+  <div class="sec-head"><span class="page">第 4 頁</span><span class="time">3 分鐘</span></div>
+  <h2>先讓最痛的兩張表不再手動，再擴大</h2>
+  <p class="sec-lede">原則：先用兩週平行比對建立信任，再停用手動流程。</p>
+
+  <div class="rollout">
+    <div class="phase">
+      <p class="when">第 1 個月</p>
+      <h3>止住手動</h3>
+      <ul>
+        <li>訪談策略團隊：實際用哪些欄位、幾點前一定要拿到。</li>
+        <li>管線上線，和手動下載平行跑兩週，每天比對，差異逐筆解釋。</li>
+        <li>訊號報告附上資料版本號，誰用哪一版一查便知。</li>
+        <li>告警接到團隊頻道，排好值班。</li>
+      </ul>
+    </div>
+    <div class="phase">
+      <p class="when">第 2–3 個月</p>
+      <h3>擴大，然後退役手動流程</h3>
+      <ul>
+        <li>加資料源：上櫃、融資融券（還原價已完成）。</li>
+        <li>回補多年歷史後：分區改按年、每週合併小檔、過期舊版本。</li>
+        <li>訂出「每天 08:00 前資料就緒」的承諾時間並監控。</li>
+        <li>欄位說明和資料目錄，大家自己查得到。</li>
+        <li>評估上雲；主要改設定。</li>
+        <li>手動下載流程正式停用。</li>
+      </ul>
+    </div>
+  </div>
+  <div class="who">
+    <div><b>策略團隊</b><span>定義需求、驗收比對</span></div>
+    <div><b>IT／基礎設施</b><span>主機、雲端帳號、金鑰管理</span></div>
+    <div><b>主管</b><span>排優先順序、拍板停用手動</span></div>
+    <div><b>法遵／稽核</b><span>資料版本要保留多久</span></div>
+  </div>
+
+  <details class="notes">
+    <summary>講稿（3 分鐘）</summary>
+    <div class="body">
+      <p>第一個月：先訪談策略團隊十個人，確認實際用到的欄位和最晚幾點要拿到。管線上線後和手動下載平行跑兩週、每天比對，差異逐筆解釋，這是讓團隊信任自動化的關鍵。同時養成習慣：訊號報告附上資料版本號。告警接到團隊頻道，排好值班。</p>
+      <p>前三個月：擴大資料源，例如上櫃、融資融券；還原價已經完成，只剩面額變更找不到證交所的資料來源，列為缺口追蹤。歷史回補到多年後，照實測結果改成按年分區、每週合併小檔、過期舊版本。訂出 08:00 前資料就緒的承諾時間並監控。補上欄位說明。評估上雲。最後由主管拍板停用手動流程。</p>
+      <p>需要的人：策略團隊定義需求並驗收；IT 提供主機與金鑰管理；主管決定優先順序；法遵或稽核決定資料版本要保留多久，這決定舊版本什麼時候可以過期，被訊號引用過的版本則永久保留。</p>
+    </div>
+  </details>
+</section>
+
+<!-- DEMO -->
+<section id="demo">
+  <div class="sec-head"><span class="page">現場操作</span><span class="time">5 分鐘</span></div>
+  <h2>面試官指定一項，當場執行</h2>
+  <p class="sec-lede">示範都在同一個 Airflow 環境裡執行，讀的是排程每天寫的同一份資料。</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>類別</th><th>指令</th><th>你會看到什麼</th></tr></thead>
+      <tbody>
+        <tr><td class="kind">必做</td><td><code>make demo-snapshots</code></td><td>版本清單：每個版本的編號、時間、哪一次執行寫的、新增幾筆。</td></tr>
+        <tr><td class="kind">必做</td><td><code>make demo-asof AT='2026-10-30 19:29'</code></td><td>那一刻這張表的內容。也可以給版本編號。</td></tr>
+        <tr><td class="kind">必做</td><td><code>make demo-correct DATE=2026-10-29</code></td><td>模擬證交所修正 2330 成交量：表裡仍是 1,388 檔、沒有重複；修正前和修正後兩版都查得到。</td></tr>
+        <tr><td class="kind">選做</td><td><code>make demo-rollback</code></td><td>退回上一次執行之前的版本：那次寫過的每張表一起退。</td></tr>
+        <tr><td class="kind">選做</td><td><code>make demo-evolve</code></td><td>中途加一個欄位，舊資料、舊版本照樣能查，新欄位在舊資料上是空值。</td></tr>
+        <tr><td class="kind">加做</td><td><code>make demo-adjusted STOCK=2762 START=2026-10-28 END=2026-10-30</code></td><td>還原價：2762 除息前一天的 80.00 變成 78.19，正好是官方參考價。</td></tr>      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+  <h2>名詞對照</h2>
+  <p class="sec-lede">技術主管會用到這些詞；對交易員來說，記右邊那句就夠了。</p>
+  <dl class="gloss">
+    <div><dt>Airflow / DAG</dt><dd>每天定時跑的工作流程，以及它的步驟圖。</dd></div>
+    <div><dt>Iceberg</dt><dd>會記住每一次修改的資料表格式。</dd></div>
+    <div><dt>snapshot</dt><dd>一個版本。每次寫入產生一個，有唯一編號。</dd></div>
+    <div><dt>time travel</dt><dd>查「某個時間點」這張表的樣子。</dd></div>
+    <div><dt>rollback</dt><dd>退回上一個版本。</dd></div>
+    <div><dt>還原價（前復權／後復權）</dt><dd>把除權息、減資、分割的跳空調整掉的價格；前復權以今天為準，後復權以第一天為準。</dd></div>
+    <div><dt>compaction</dt><dd>把很多小檔合成大檔，查詢變快；按年分區才能把一年合成一個檔。</dd></div>
+    <div><dt>schema evolution</dt><dd>中途加欄位，不用重寫舊資料。</dd></div>
+    <div><dt>partition</dt><dd>依交易日分格存放，修正一天只動一格。</dd></div>
+    <div><dt>CI / CD</dt><dd>改程式後自動檢查／檢查通過後自動上線。</dd></div>
+    <div><dt>sensor</dt><dd>定時醒來看「資料來了沒」的步驟。</dd></div>
+    <div><dt>manifest</dt><dd>每天的執行收據：用了哪些版本、各幾筆。</dd></div>
+  </dl>
+</section>
+
+<footer>
+  程式碼：<a href="https://github.com/smpss92118/twse-lakehouse-etl">github.com/smpss92118/twse-lakehouse-etl</a>　·　數字來自 2026-10-29 的實際執行；分區數字來自 scripts/bench_partitions.py 的實測。
+</footer>
+
+</div>
+
+</body></html>
