@@ -37,6 +37,8 @@ from airflow.timetables.trigger import CronTriggerTimetable
 
 TPE = pendulum.timezone("Asia/Taipei")
 REPORTS = {"MI_INDEX": "quotes", "T86": "institutional", "CORPORATE_ACTIONS": "corporate_actions"}
+# Names shown in the Airflow UI; task ids (logs, CLI, XCom) stay English.
+REPORT_LABELS = {"quotes": "收盤行情", "institutional": "法人買賣超", "corporate_actions": "除權息"}
 
 log = logging.getLogger(__name__)
 
@@ -102,7 +104,9 @@ def _on_dag_run_failure(context) -> None:
     doc_md=__doc__,
 )
 def twse_daily_etl():
-    @task.short_circuit(retries=3, retry_delay=timedelta(minutes=2), retry_exponential_backoff=True)
+    @task.short_circuit(
+        task_display_name="判斷交易日", retries=3, retry_delay=timedelta(minutes=2), retry_exponential_backoff=True
+    )
     def check_trading_day() -> str | bool:
         from twse_etl.pipeline import trading_day_status
 
@@ -114,7 +118,7 @@ def twse_daily_etl():
         log.info("%s: %s", d, status.reason)
         return d.isoformat() if status.is_trading_day else False
 
-    @task.sensor(poke_interval=600, timeout=6 * 3600, mode="reschedule")
+    @task.sensor(task_display_name="等待證交所發布", poke_interval=600, timeout=6 * 3600, mode="reschedule")
     def wait_for_reports(trade_date: str) -> PokeReturnValue:
         """A poke that cannot reach TWSE is 'not ready yet' until the cutoff: the data normally
         arrives long before 19:00, and failing the run over a 15-minute outage would need a person."""
@@ -142,11 +146,12 @@ def twse_daily_etl():
             alert("data_delayed", trade_date=trade_date, row_counts=counts)
         return PokeReturnValue(is_done=False)
 
-    @task.branch
+    @task.branch(task_display_name="有無資料分流")
     def route(status: str) -> list[str] | str:
         return [f"extract_{slug}" for slug in REPORTS.values()] if status == "ready" else "check_unscheduled_closure"
 
-    @task(retries=2, retry_delay=timedelta(minutes=2))  # network only: MissingDataError skips retries
+    # network only: MissingDataError skips retries
+    @task(task_display_name="確認臨時休市", retries=2, retry_delay=timedelta(minutes=2))
     def check_unscheduled_closure(trade_date: str) -> str:
         from twse_etl.pipeline import resolve_missing_data
 
@@ -167,14 +172,14 @@ def twse_daily_etl():
         run_id = get_current_context()["run_id"]
         return _run(stage_report, report, date.fromisoformat(trade_date), bronze_uri, _settings(), run_id)
 
-    @task(retries=0)
+    @task(task_display_name="寫入前稽核", retries=0)
     def audit(trade_date: str, quotes: dict, institutional: dict, corporate_actions: dict) -> dict:
         from twse_etl.pipeline import audit as audit_day
 
         staged = {"MI_INDEX": quotes, "T86": institutional, "CORPORATE_ACTIONS": corporate_actions}
         return _run(audit_day, date.fromisoformat(trade_date), staged, _settings())
 
-    @task
+    @task(task_display_name="寫入正式表")
     def publish_silver(trade_date: str, quotes: dict, institutional: dict, corporate_actions: dict, _audit: dict):
         """One task writes all Silver tables: the SQLite catalog allows a single writer at a time."""
         from twse_etl.pipeline import publish
@@ -182,13 +187,13 @@ def twse_daily_etl():
         staged = {"MI_INDEX": quotes, "T86": institutional, "CORPORATE_ACTIONS": corporate_actions}
         return publish(date.fromisoformat(trade_date), staged, _settings(), get_current_context()["run_id"])
 
-    @task
+    @task(task_display_name="產出合併表")
     def build_gold(trade_date: str, _published: dict) -> dict:
         from twse_etl.pipeline import build_gold as build
 
         return build(date.fromisoformat(trade_date), _settings(), get_current_context()["run_id"])
 
-    @task(retries=0)
+    @task(task_display_name="寫入後對帳", retries=0)
     def reconcile(
         trade_date: str, quotes: dict, institutional: dict, corporate_actions: dict, audit_report: dict, _gold: dict
     ) -> dict:
@@ -205,9 +210,12 @@ def twse_daily_etl():
 
     staged = {}
     for report, slug in REPORTS.items():
-        bronze = extract.override(task_id=f"extract_{slug}")(report, trade_date)
+        label = REPORT_LABELS[slug]
+        bronze = extract.override(task_id=f"extract_{slug}", task_display_name=f"抓取{label}")(report, trade_date)
         routed >> bronze
-        staged[slug] = stage.override(task_id=f"stage_{slug}")(report, trade_date, bronze)
+        staged[slug] = stage.override(task_id=f"stage_{slug}", task_display_name=f"清洗{label}")(
+            report, trade_date, bronze
+        )
 
     audit_report = audit(trade_date, **staged)
     published = publish_silver(trade_date, **staged, _audit=audit_report)
